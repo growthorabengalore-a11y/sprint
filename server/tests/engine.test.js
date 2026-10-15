@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeDaily, buildReport } from '../services/performance.js';
+import { computeDaily, computeAdminDaily, buildReport } from '../services/performance.js';
 import { statusFromMinutes } from '../services/attendanceStatus.js';
 import { businessDateKey } from '../utils/time.js';
 
@@ -15,6 +15,16 @@ test('Hemalatha sheet example = 58.33%', () => {
 });
 test('Kusuma = 36.67% (payment 0% counts)', () => {
   assert.equal(computeDaily(m(100, 4, 5000), m(60, 2, 0), S).performance, 36.67);
+});
+test('admin score with zero or unconfirmed payment is out of 50; employee score is unchanged', () => {
+  const morning = m(2, 4, 0);
+  const evening = m(2, 2, 0);
+  assert.equal(computeAdminDaily(morning, evening, S).performance, 37.5);
+  assert.equal(computeAdminDaily(morning, m(2, 2, 500, 'not_confirm'), S).performance, 37.5);
+  assert.equal(computeDaily(morning, evening, S).performance, 75);
+});
+test('admin score includes payment weighting only when a positive payment is confirmed', () => {
+  assert.equal(computeAdminDaily(m(2, 4, 1000), m(2, 2, 500), S).performance, 62.5);
 });
 test('Radha: only talk time applicable = 100%', () => {
   assert.equal(computeDaily(m(60, 0, 0, 'not_confirm'), m(60, 0, 0, 'not_confirm'), S).performance, 100);

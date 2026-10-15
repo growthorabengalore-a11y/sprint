@@ -57,9 +57,9 @@ function dateRange(q, s) {
   if (rangeKeys(from, to).length > 400) throw new HttpError(400, 'Range too large');
   return { from, to, today };
 }
-async function report({ from, to, today }, employees, s) {
+async function report({ from, to, today }, employees, s, adminScoring = false) {
   const subs = await SprintSubmission.find({ dateKey: { $gte: from, $lte: to }, employee: { $in: employees.map((e) => e._id) } }).lean();
-  return buildReport({ employees, submissions: subs, from, to, settings: s, today });
+  return buildReport({ employees, submissions: subs, from, to, settings: s, today, adminScoring });
 }
 export { report as sprintReport, dateRange };
 
@@ -77,21 +77,21 @@ r.get('/daily', requireRole('admin'), wrap(async (req, res) => {
   const rg = dateRange({ from: req.query.date, to: req.query.date }, s);
   const emps = await User.find({ role: 'employee', archived: false }).sort({ createdAt: 1 });
   // daily view shows every day even non-working days if explicitly selected
-  const rep = await report(rg, emps, { ...s, workingDays: [0, 1, 2, 3, 4, 5, 6], holidays: [] });
+  const rep = await report(rg, emps, { ...s, workingDays: [0, 1, 2, 3, 4, 5, 6], holidays: [] }, true);
   res.json({ ok: true, date: rg.from, totals: rep.totals, employees: rep.employees.map((e) => ({ ...e, ...e.rows[0], rows: undefined })) });
 }));
 r.get('/report', requireRole('admin'), wrap(async (req, res) => {
   const s = await getSettings();
   const rg = dateRange(req.query, s);
   const emps = await User.find({ role: 'employee', archived: false, ...(req.query.employeeId ? { _id: req.query.employeeId } : {}) }).sort({ createdAt: 1 });
-  res.json({ ok: true, ...(await report(rg, emps, s)), weekStartDay: s.weekStartDay });
+  res.json({ ok: true, ...(await report(rg, emps, s, true)), weekStartDay: s.weekStartDay });
 }));
 r.get('/employee/:id', requireRole('admin'), wrap(async (req, res) => {
   const s = await getSettings();
   const rg = dateRange(req.query, s);
   const emp = await User.findOne({ _id: req.params.id, role: 'employee' });
   if (!emp) throw new HttpError(404, 'Not found');
-  const rep = await report(rg, [emp], s);
+  const rep = await report(rg, [emp], s, true);
   res.json({ ok: true, ...rep.employees[0], from: rg.from, to: rg.to, daily: rep.daily });
 }));
 export default r;

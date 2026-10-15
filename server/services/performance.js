@@ -47,6 +47,15 @@ export function computeDaily(morning, evening, settings = {}) {
   return { projected: p, achieved: a, metricPct: pcts, performance, status, pendingPayment };
 }
 
+export function computeAdminDaily(morning, evening, settings = {}) {
+  const result = computeDaily(morning, evening, settings);
+  if (!evening || result.performance === null) return result;
+  const paymentCollected = evening.paymentStatus === 'confirmed' && evening.paymentAmount > 0;
+  const { talk, leads, pay } = result.metricPct;
+  result.performance = round2((talk || 0) * 0.25 + (leads || 0) * 0.25 + (paymentCollected ? (pay || 0) * 0.5 : 0));
+  return result;
+}
+
 export function isWorkingDay(dateKey, settings) {
   return settings.workingDays.includes(weekday(dateKey)) && !(settings.holidays || []).includes(dateKey);
 }
@@ -60,7 +69,7 @@ const brief = (s) => ({ talkTimeMinutes: s.talkTimeMinutes, leads: s.leads, paym
  *  - periodPerformance = per metric sum(min(achieved,projected))/sum(projected) over days with projection>0,
  *    then mean of applicable metrics (commitment-weighted; never an average of averages).
  */
-export function buildReport({ employees, submissions, from, to, settings, today }) {
+export function buildReport({ employees, submissions, from, to, settings, today, adminScoring = false }) {
   const last = today && today < to ? today : to;
   const days = rangeKeys(from, last).filter((d) => isWorkingDay(d, settings));
   const subMap = new Map();
@@ -76,7 +85,7 @@ export function buildReport({ employees, submissions, from, to, settings, today 
     for (const d of days) {
       const m = subMap.get(`${id}|${d}|morning`);
       const ev = subMap.get(`${id}|${d}|evening`);
-      const r = computeDaily(m, ev, settings);
+      const r = adminScoring ? computeAdminDaily(m, ev, settings) : computeDaily(m, ev, settings);
       rows.push({ date: d, morning: m ? brief(m) : null, evening: ev ? brief(ev) : null, ...r });
       if (m && ev) e.completed++; else e.missing++;
       e.talk += r.achieved.talk; e.leads += r.achieved.leads; e.payments += r.achieved.pay;
@@ -90,7 +99,9 @@ export function buildReport({ employees, submissions, from, to, settings, today 
       }
       dayAgg[d].talk += r.achieved.talk; dayAgg[d].leads += r.achieved.leads; dayAgg[d].payments += r.achieved.pay;
     }
-    const pm = Object.values(e.pmin).filter(([, den]) => den > 0).map(([n, den]) => (n / den) * 100);
+    const pm = adminScoring
+      ? (e.perfN ? [round2(e.perfSum / e.perfN)] : [])
+      : Object.values(e.pmin).filter(([, den]) => den > 0).map(([n, den]) => (n / den) * 100);
     out.push({
       employeeId: emp.employeeId, name: emp.name, _id: id,
       talkMinutes: e.talk, leads: e.leads, confirmedPayments: e.payments, pendingPaymentDays: e.pending,

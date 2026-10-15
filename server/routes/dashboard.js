@@ -20,7 +20,7 @@ r.get('/stats', wrap(async (_req, res) => {
   const [totalEmployees, activeEmployees, disabledEmployees] = [emps.length, emps.filter((e) => e.isActive).length, emps.filter((e) => !e.isActive).length];
   const active = emps.filter((e) => e.isActive);
   const subs = await SprintSubmission.find({ dateKey: { $gte: monthFrom < weekFrom ? monthFrom : weekFrom, $lte: today }, employee: { $in: active.map((e) => e._id) } }).lean();
-  const mk = (from, st) => buildReport({ employees: active, submissions: subs.filter((x) => x.dateKey >= from), from, to: today, settings: st, today });
+  const mk = (from, st) => buildReport({ employees: active, submissions: subs.filter((x) => x.dateKey >= from), from, to: today, settings: st, today, adminScoring: true });
   const day = mk(today, allDays), week = mk(weekFrom, s), month = mk(monthFrom, s);
   const todays = subs.filter((x) => x.dateKey === today);
   const eveningSet = new Set(todays.filter((x) => x.session === 'evening').map((x) => String(x.employee)));
