@@ -12,22 +12,27 @@ export default function SprintReports() {
   const [date, setDate] = useState<string>('');
   const eff = date || stats.data?.today || '';
   const { data, loading, error, reload } = useFetch(eff ? '/sprints/daily' : null, { date: eff });
+  const [missingSession, setMissingSession] = useState<'morning' | 'evening'>('morning');
   const [q, setQ] = useState(''); const [sort, setSort] = useState<'name' | 'perf'>('name'); const [busy, setBusy] = useState<'all' | 'missing' | null>(null);
   const png = useRef<HTMLDivElement>(null);
   const missingPng = useRef<HTMLDivElement>(null);
   let rows: any[] = data?.employees || [];
   rows = rows.filter((e) => (e.name + e.employeeId).toLowerCase().includes(q.toLowerCase()));
   if (sort === 'perf') rows = [...rows].sort((a, b) => (b.performance ?? -1) - (a.performance ?? -1)); else rows = [...rows].sort((a, b) => a.name.localeCompare(b.name));
-  const missing = (data?.employees || []).flatMap((e: any) => [
-    ...(!e.morning ? [{ name: e.name, session: 'Morning' as const }] : []),
-    ...(!e.evening ? [{ name: e.name, session: 'Evening' as const }] : []),
-  ]).sort((a: { name: string; session: string }, b: { name: string; session: string }) =>
-    a.name.localeCompare(b.name) || a.session.localeCompare(b.session));
+  const missing = (data?.employees || [])
+    .filter((e: any) => !e[missingSession])
+    .map((e: any) => ({ name: e.name }))
+    .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
   const exp = async (kind: 'all' | 'missing') => {
     const node = kind === 'all' ? png.current : missingPng.current;
     if (!node) return;
     setBusy(kind);
-    try { await downloadPng(node, `${kind === 'all' ? 'Sprint-Updates' : 'Missing-Sprint-Updates'}-${eff}.png`); }
+    try {
+      const filename = kind === 'all'
+        ? `Sprint-Updates-${eff}.png`
+        : `Missing-${missingSession === 'morning' ? 'Morning' : 'Evening'}-Sprint-Updates-${eff}.png`;
+      await downloadPng(node, filename);
+    }
     catch { toast('PNG export failed', 'err'); }
     finally { setBusy(null); }
   };
@@ -42,6 +47,10 @@ export default function SprintReports() {
         <button className="btn btn-ghost" onClick={() => setDate('')}>Today</button>
         <button className="btn btn-ghost" onClick={reload}><FiRefreshCw /> Refresh</button>
         <button className="btn btn-primary ml-auto" disabled={!data || busy !== null} onClick={() => exp('all')}><FiDownload /> {busy === 'all' ? 'Preparing…' : 'Download PNG'}</button>
+        <select className="input !w-auto" aria-label="Missing sprint session" value={missingSession} onChange={(e) => setMissingSession(e.target.value as 'morning' | 'evening')}>
+          <option value="morning">Morning missing</option>
+          <option value="evening">Evening missing</option>
+        </select>
         <button className="btn btn-ghost" disabled={!data || busy !== null} onClick={() => exp('missing')}><FiDownload /> {busy === 'missing' ? 'Preparing…' : 'Download Missing List PNG'}</button>
       </div>
       {error && <ErrorBox text={error} onRetry={reload} />}
@@ -64,7 +73,7 @@ export default function SprintReports() {
         {['morning', 'evening'].map((s) => { const x = e[s]; return <div key={s} className="mt-2 rounded-lg bg-slate-50 p-2 text-sm"><div className="font-semibold capitalize">{s}</div>{x ? <div className="grid grid-cols-3 gap-1"><span>{fmtMinutes(x.talkTimeMinutes)}</span><span>{x.leads} leads</span><span className={x.paymentStatus === 'not_confirm' ? 'text-red-600' : ''}>{payCell(x)}</span></div> : miss}</div>; })}</div>)}</div>
       {data && <div style={{ position: 'fixed', left: -12000, top: 0 }} aria-hidden>
         <DailySprintPng ref={png} data={data} />
-        <MissingSprintPng ref={missingPng} date={eff} entries={missing} />
+        <MissingSprintPng ref={missingPng} date={eff} session={missingSession} entries={missing} />
       </div>}
     </div>
   );
