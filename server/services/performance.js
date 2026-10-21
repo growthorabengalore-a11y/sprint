@@ -2,11 +2,18 @@
 import { rangeKeys, weekday } from '../utils/time.js';
 
 const round2 = (n) => Math.round(n * 100) / 100;
+const METRIC_WEIGHTS = { talk: 25, leads: 25, pay: 50 };
 
 /** metric % = achieved / projected * 100, capped at 100. null (excluded) when projection is 0/absent. */
 export function metricPct(projected, achieved) {
   if (projected == null || !(projected > 0)) return null;
   return Math.min(100, ((achieved || 0) / projected) * 100);
+}
+function weightedPerformance(pcts) {
+  const applicable = Object.entries(METRIC_WEIGHTS).filter(([key]) => pcts[key] !== null);
+  const weight = applicable.reduce((sum, [key]) => sum + METRIC_WEIGHTS[key], 0);
+  if (!weight) return null;
+  return round2(applicable.reduce((sum, [key]) => sum + pcts[key] * METRIC_WEIGHTS[key], 0) / weight);
 }
 function projections(morning) {
   return {
@@ -26,23 +33,26 @@ function achievedOf(evening) {
 export function computeDaily(morning, evening, settings = {}) {
   const model = settings.performanceModel || 'projection';
   const a = achievedOf(evening);
+  const paymentApplicable = morning?.paymentStatus === 'confirmed' && morning.paymentAmount > 0
+    && evening?.paymentStatus === 'confirmed' && evening.paymentAmount > 0;
   let p = projections(morning);
   if (model === 'fixed') {
     const t = settings.fixedTargets || {};
     p = { talk: t.talkMinutes, leads: t.leads, pay: t.payments };
   }
+  const hasPaymentTarget = p.pay > 0;
+  if (!paymentApplicable) p.pay = null;
   const pcts = { talk: metricPct(p.talk, a.talk), leads: metricPct(p.leads, a.leads), pay: metricPct(p.pay, a.pay) };
-  const applicable = Object.values(pcts).filter((v) => v !== null);
   const pendingPayment = !!(evening && evening.paymentStatus === 'not_confirm');
   let status;
   let performance = null;
   if (!morning && !evening) status = 'No submission';
   else if (!evening) status = 'Incomplete';
   else if (!morning && model !== 'fixed') status = 'Incomplete';
-  else if (applicable.length === 0) status = 'No applicable metric';
+  else if (!Object.values(pcts).some((v) => v !== null)) status = 'No applicable metric';
   else {
-    performance = round2(applicable.reduce((s, v) => s + v, 0) / applicable.length);
-    status = performance === 0 ? 'Zero achievement' : pendingPayment && p.pay ? 'Pending payment confirmation' : 'Calculated';
+    performance = weightedPerformance(pcts);
+    status = performance === 0 ? 'Zero achievement' : pendingPayment && hasPaymentTarget ? 'Pending payment confirmation' : 'Calculated';
   }
   return { projected: p, achieved: a, metricPct: pcts, performance, status, pendingPayment };
 }
@@ -57,8 +67,9 @@ const brief = (s) => ({ talkTimeMinutes: s.talkTimeMinutes, leads: s.leads, paym
  * Report over [from,to].
  *  - Totals = sum of EVENING achieved values; payments = confirmed only.
  *  - averageDailyPerformance = mean of calculable daily performances.
- *  - periodPerformance = per metric sum(min(achieved,projected))/sum(projected) over days with projection>0,
- *    then mean of applicable metrics (commitment-weighted; never an average of averages).
+ *  - Performance weights are 25% talk, 25% leads, and 50% confirmed positive payments.
+ *    Unavailable metrics are excluded and the remaining weights are normalized.
+ *  - periodPerformance uses commitment-weighted achieved/projected ratios, then applies those metric weights.
  */
 export function buildReport({ employees, submissions, from, to, settings, today }) {
   const last = today && today < to ? today : to;
@@ -90,12 +101,15 @@ export function buildReport({ employees, submissions, from, to, settings, today 
       }
       dayAgg[d].talk += r.achieved.talk; dayAgg[d].leads += r.achieved.leads; dayAgg[d].payments += r.achieved.pay;
     }
-    const pm = Object.values(e.pmin).filter(([, den]) => den > 0).map(([n, den]) => (n / den) * 100);
+    const periodPcts = Object.fromEntries(Object.entries(e.pmin).map(([key, [n, den]]) => [
+      key, den > 0 ? Math.min((n / den) * 100, 100) : null,
+    ]));
+    const periodPerformance = weightedPerformance(periodPcts);
     out.push({
       employeeId: emp.employeeId, name: emp.name, _id: id,
       talkMinutes: e.talk, leads: e.leads, confirmedPayments: e.payments, pendingPaymentDays: e.pending,
       averageDailyPerformance: e.perfN ? round2(e.perfSum / e.perfN) : null,
-      periodPerformance: pm.length ? round2(pm.reduce((s, v) => s + v, 0) / pm.length) : null,
+      periodPerformance,
       completedDays: e.completed, missingSubmissions: e.missing, rank: null, rows,
     });
     totals.talkMinutes += e.talk; totals.leads += e.leads; totals.confirmedPayments += e.payments; totals.pendingPayments += e.pending;

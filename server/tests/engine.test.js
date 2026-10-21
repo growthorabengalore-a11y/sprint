@@ -13,8 +13,14 @@ const m = (t, l, p, st = 'confirmed') => ({ talkTimeMinutes: t, leads: l, paymen
 test('Hemalatha sheet example = 58.33%', () => {
   assert.equal(computeDaily(m(120, 3, 0, 'not_confirm'), m(60, 2, 0, 'not_confirm'), S).performance, 58.33);
 });
-test('Kusuma = 36.67% (payment 0% counts)', () => {
-  assert.equal(computeDaily(m(100, 4, 5000), m(60, 2, 0), S).performance, 36.67);
+test('zero evening payment excludes payment weight and normalizes talk and leads', () => {
+  assert.equal(computeDaily(m(100, 4, 5000), m(60, 2, 0), S).performance, 55);
+});
+test('confirmed positive payment uses 25/25/50 metric weights', () => {
+  assert.equal(computeDaily(m(100, 4, 1000), m(50, 2, 500), S).performance, 50);
+});
+test('morning zero payment excludes payment weight even if evening payment is positive', () => {
+  assert.equal(computeDaily(m(100, 4, 0), m(60, 4, 500), S).performance, 80);
 });
 test('Radha: only talk time applicable = 100%', () => {
   assert.equal(computeDaily(m(60, 0, 0, 'not_confirm'), m(60, 0, 0, 'not_confirm'), S).performance, 100);
@@ -50,5 +56,5 @@ test('report totals use evening achieved, confirmed payments only; period perf w
   const r = buildReport({ employees: emp, submissions: subs, from: '2026-10-05', to: '2026-10-05', settings: S, today: '2026-10-10' });
   assert.equal(r.totals.talkMinutes, 60);
   assert.equal(r.totals.confirmedPayments, 2000);
-  assert.equal(r.employees[0].periodPerformance, 63.33);
+  assert.equal(r.employees[0].periodPerformance, 57.5);
 });
