@@ -6,6 +6,7 @@ import { ErrorBox, Skeleton, StatusBadge, toast } from '../../components/ui';
 import { fmtMinutes, inr, pct, fmtDate, rangeFor, monthWeeks, payCell } from '../../utils/format';
 import { downloadPng } from '../../utils/exportPng';
 import RangeSprintPng from '../../reports/RangeSprintPng';
+import PerformerSprintPng from '../../reports/PerformerSprintPng';
 
 const KINDS = [['1w', '1-week report'], ['2w', '2-week report'], ['3w', '3-week report'], ['month', '1-month report'], ['week1', 'Week 1'], ['week2', 'Week 2'], ['week3', 'Week 3'], ['week4', 'Week 4'], ['week5', 'Week 5'], ['custom', 'Custom range']];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -16,12 +17,41 @@ export default function PerformanceReports() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear()); const [month, setMonth] = useState(now.getMonth());
   const [kind, setKind] = useState('month'); const [custom, setCustom] = useState({ from: '', to: '' });
-  const [emp, setEmp] = useState(''); const [busy, setBusy] = useState(false);
+  const [emp, setEmp] = useState(''); const [busy, setBusy] = useState<'report' | 'performers' | null>(null);
   const range = rangeFor(kind, year, month, ws, custom);
   const ready = !!range.from && !!range.to && range.from <= range.to;
   const emps = useFetch('/employees', { limit: 200 });
   const { data, loading, error, reload } = useFetch(ready ? '/sprints/report' : null, { ...range, employeeId: emp || undefined });
   const png = useRef<HTMLDivElement>(null);
+  const performerPng = useRef<HTMLDivElement>(null);
+  const performerGroups = useMemo(() => {
+    const employees = (data?.employees || []).map((employee: any) => {
+      const totals = employee.rows.reduce((sum: any, row: any) => ({
+        talk: sum.talk + (row.achieved?.talk || 0),
+        talkTarget: sum.talkTarget + (row.projected?.talk || 0),
+        leads: sum.leads + (row.achieved?.leads || 0),
+        leadsTarget: sum.leadsTarget + (row.projected?.leads || 0),
+        payments: sum.payments + (row.achieved?.pay || 0),
+      }), { talk: 0, talkTarget: 0, leads: 0, leadsTarget: 0, payments: 0 });
+      const metTalk = totals.talkTarget > 0 && totals.talk >= totals.talkTarget;
+      const metLeads = totals.leadsTarget > 0 && totals.leads >= totals.leadsTarget;
+      const targetProgress = [
+        totals.talkTarget > 0 ? Math.min(totals.talk / totals.talkTarget, 1) : 0,
+        totals.leadsTarget > 0 ? Math.min(totals.leads / totals.leadsTarget, 1) : 0,
+      ];
+      return { name: employee.name, ...totals, metTalk, metLeads, targetProgress: (targetProgress[0] + targetProgress[1]) / 2 };
+    });
+    const byName = (a: any, b: any) => a.name.localeCompare(b.name);
+    return {
+      paid: employees.filter((employee: any) => employee.payments > 0)
+        .sort((a: any, b: any) => b.payments - a.payments || byName(a, b)),
+      unpaidTargetAchievers: employees.filter((employee: any) =>
+        employee.payments === 0 && employee.metTalk && employee.metLeads).sort(byName),
+      unpaidTargetMissers: employees.filter((employee: any) =>
+        employee.payments === 0 && !(employee.metTalk && employee.metLeads))
+        .sort((a: any, b: any) => a.targetProgress - b.targetProgress || byName(a, b)),
+    };
+  }, [data]);
   const weekly = useMemo(() => {
     if (!data) return [];
     return monthWeeks(year, month, ws).map((w, i) => { const d = data.daily.filter((x: any) => x.date >= w.from && x.date <= w.to);
@@ -29,7 +59,16 @@ export default function PerformanceReports() {
       return { week: `W${i + 1}`, talk: d.reduce((s: number, x: any) => s + x.talkMinutes, 0), leads: d.reduce((s: number, x: any) => s + x.leads, 0), payments: d.reduce((s: number, x: any) => s + x.payments, 0), perf: p.length ? Math.round(p.reduce((s: number, x: any) => s + x.averagePerformance, 0) / p.length * 100) / 100 : null }; });
   }, [data, year, month, ws]);
   const title = emp ? `${emps.data?.items.find((e: any) => e.id === emp)?.name || 'Employee'} - Sprint Report` : `${KINDS.find((k) => k[0] === kind)?.[1]} - Sprint Report`;
-  const exp = async () => { if (!png.current) return; setBusy(true); try { await downloadPng(png.current, `${title}-${range.from}_${range.to}.png`); } catch { toast('PNG export failed', 'err'); } finally { setBusy(false); } };
+  const exp = async (kind: 'report' | 'performers') => {
+    const node = kind === 'report' ? png.current : performerPng.current;
+    if (!node) return;
+    setBusy(kind);
+    try {
+      const filename = kind === 'report' ? `${title}-${range.from}_${range.to}.png` : `Sprint-Performers-${range.from}_${range.to}.png`;
+      await downloadPng(node, filename);
+    } catch { toast('PNG export failed', 'err'); }
+    finally { setBusy(null); }
+  };
   const sel = data?.employees?.[0];
   return (
     <div className="space-y-4">
@@ -40,7 +79,7 @@ export default function PerformanceReports() {
         <div><label className="label">Range</label><select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>{KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
         <div><label className="label">Employee</label><select className="input" value={emp} onChange={(e) => setEmp(e.target.value)}><option value="">All employees</option>{emps.data?.items.map((e: any) => <option key={e.id} value={e.id}>{e.name} ({e.employeeId})</option>)}</select></div>
         {kind === 'custom' && <><div><label className="label">From</label><input type="date" className="input" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></div><div><label className="label">To</label><input type="date" className="input" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></div></>}
-        <div className="col-span-2 flex items-end gap-2 md:col-span-1"><button className="btn btn-ghost" onClick={reload}><FiRefreshCw /></button><button className="btn btn-primary flex-1" disabled={!data || busy} onClick={exp}><FiDownload /> {busy ? '…' : 'PNG'}</button></div>
+        <div className="col-span-2 flex flex-wrap items-end gap-2 md:col-span-2"><button className="btn btn-ghost" onClick={reload}><FiRefreshCw /></button><button className="btn btn-primary flex-1" disabled={!data || busy !== null} onClick={() => exp('report')}><FiDownload /> {busy === 'report' ? 'Preparing…' : 'PNG'}</button><button className="btn btn-ghost flex-1" disabled={!data || busy !== null} onClick={() => exp('performers')}><FiDownload /> {busy === 'performers' ? 'Preparing…' : 'Performer PNG'}</button></div>
       </div>
       <div className="text-sm font-semibold text-crimson-700">{ready ? `${fmtDate(range.from)} → ${fmtDate(range.to)}` : 'Select a valid date range'}</div>
       {error && <ErrorBox text={error} onRetry={reload} />}
@@ -61,7 +100,10 @@ export default function PerformanceReports() {
           {!data?.employees.length && !loading && <tr><td className="td text-center text-slate-500" colSpan={9}>No data</td></tr>}</tbody></table></div>
       {emp && sel && <div className="card overflow-x-auto"><div className="p-3 font-bold">{sel.name} — daily history</div><table className="w-full"><thead><tr>{['Date', 'Morning (plan)', 'Evening (achieved)', 'Performance', 'Status'].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
         <tbody>{sel.rows.map((r: any) => <tr key={r.date}><td className="td">{fmtDate(r.date)}</td><td className="td text-sm">{r.morning ? `${fmtMinutes(r.morning.talkTimeMinutes)} · ${r.morning.leads} · ${payCell(r.morning)}` : '—'}</td><td className="td text-sm">{r.evening ? `${fmtMinutes(r.evening.talkTimeMinutes)} · ${r.evening.leads} · ${payCell(r.evening)}` : '—'}</td><td className="td font-bold">{pct(r.performance)}</td><td className="td"><StatusBadge s={r.status} /></td></tr>)}</tbody></table></div>}
-      {data && <div style={{ position: 'fixed', left: -12000, top: 0 }} aria-hidden><RangeSprintPng ref={png} data={data} title={title} /></div>}
+      {data && <div style={{ position: 'fixed', left: -12000, top: 0 }} aria-hidden>
+        <RangeSprintPng ref={png} data={data} title={title} />
+        <PerformerSprintPng ref={performerPng} from={range.from} to={range.to} groups={performerGroups} />
+      </div>}
     </div>
   );
 }
