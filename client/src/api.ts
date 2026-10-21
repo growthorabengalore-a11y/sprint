@@ -1,5 +1,6 @@
 import axios from 'axios';
-export const api = axios.create({ baseURL: '/api', timeout: 30000 });
+const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://sprint-pnqh.onrender.com/api';
+export const api = axios.create({ baseURL: apiBaseUrl, timeout: 30000 });
 export const TOKEN_KEY = 'growthora_token';
 api.interceptors.request.use((c) => { const t = localStorage.getItem(TOKEN_KEY); if (t) c.headers.Authorization = `Bearer ${t}`; return c; });
 api.interceptors.response.use((r) => r, (e) => {

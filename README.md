@@ -29,6 +29,11 @@ npm run dev:client                 # http://localhost:5173  (proxies /api)
 ```
 Camera access needs HTTPS or `localhost`. For production serve the built client (`cd client && npm run build`) behind HTTPS and set `FRONTEND_URL`.
 
+### Vercel + Render deployment
+
+- In Vercel, set `VITE_API_URL` to the backend API base URL (for example, `https://sprint-pnqh.onrender.com/api`) and redeploy. If omitted, the client defaults to this project's Render API URL.
+- In Render, set `FRONTEND_URL` to the exact frontend origin (for example, `https://sprint-bay.vercel.app`, without a trailing slash) so the API CORS policy accepts browser requests from Vercel.
+
 If `loadFromUri` cannot find models, check the file names in `client/public/models` match `tiny_face_detector_model.json`, `face_landmark_68_model.json`, `face_recognition_model.json` + their `.bin` shards (the download script saves what the manifests list).
 
 ## Login flow
