@@ -1,0 +1,12 @@
+{
+  "name": "growthora-sprint-attendance",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "seed:admin": "npm run seed:admin --prefix server",
+    "models": "node client/scripts/download-models.mjs",
+    "test": "npm test --prefix server"
+  }
+}
