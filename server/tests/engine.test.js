@@ -10,20 +10,23 @@ const S = {
 };
 const m = (t, l, p, st = 'confirmed') => ({ talkTimeMinutes: t, leads: l, paymentAmount: p, paymentStatus: st });
 
-test('Hemalatha sheet example = 58.33%', () => {
-  assert.equal(computeDaily(m(120, 3, 0, 'not_confirm'), m(60, 2, 0, 'not_confirm'), S).performance, 58.33);
+test('unconfirmed payment removes its 50% weight', () => {
+  assert.equal(computeDaily(m(120, 3, 0, 'not_confirm'), m(60, 2, 0, 'not_confirm'), S).performance, 29.17);
 });
-test('zero evening payment excludes payment weight and normalizes talk and leads', () => {
-  assert.equal(computeDaily(m(100, 4, 5000), m(60, 2, 0), S).performance, 55);
+test('zero evening payment leaves talk and leads capped at 50% total', () => {
+  assert.equal(computeDaily(m(100, 4, 5000), m(60, 2, 0), S).performance, 27.5);
 });
 test('confirmed positive payment uses 25/25/50 metric weights', () => {
   assert.equal(computeDaily(m(100, 4, 1000), m(50, 2, 500), S).performance, 50);
 });
 test('morning zero payment excludes payment weight even if evening payment is positive', () => {
-  assert.equal(computeDaily(m(100, 4, 0), m(60, 4, 500), S).performance, 80);
+  assert.equal(computeDaily(m(100, 4, 0), m(60, 4, 500), S).performance, 40);
 });
-test('Radha: only talk time applicable = 100%', () => {
-  assert.equal(computeDaily(m(60, 0, 0, 'not_confirm'), m(60, 0, 0, 'not_confirm'), S).performance, 100);
+test('only talk time applicable retains its 25% weight', () => {
+  assert.equal(computeDaily(m(60, 0, 0, 'not_confirm'), m(60, 0, 0, 'not_confirm'), S).performance, 25);
+});
+test('unconfirmed payment with both other metrics fully achieved scores 50%', () => {
+  assert.equal(computeDaily(m(60, 2, 1000), m(60, 2, 0, 'not_confirm'), S).performance, 50);
 });
 test('300/3 capped => 100', () => {
   assert.equal(computeDaily(m(60, 2, 1000), m(120, 5, 9000), S).performance, 100);

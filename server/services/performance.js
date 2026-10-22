@@ -11,9 +11,8 @@ export function metricPct(projected, achieved) {
 }
 function weightedPerformance(pcts) {
   const applicable = Object.entries(METRIC_WEIGHTS).filter(([key]) => pcts[key] !== null);
-  const weight = applicable.reduce((sum, [key]) => sum + METRIC_WEIGHTS[key], 0);
-  if (!weight) return null;
-  return round2(applicable.reduce((sum, [key]) => sum + pcts[key] * METRIC_WEIGHTS[key], 0) / weight);
+  if (!applicable.length) return null;
+  return round2(applicable.reduce((sum, [key]) => sum + pcts[key] * METRIC_WEIGHTS[key] / 100, 0));
 }
 function projections(morning) {
   return {
@@ -68,7 +67,7 @@ const brief = (s) => ({ talkTimeMinutes: s.talkTimeMinutes, leads: s.leads, paym
  *  - Totals = sum of EVENING achieved values; payments = confirmed only.
  *  - averageDailyPerformance = mean of calculable daily performances.
  *  - Performance weights are 25% talk, 25% leads, and 50% confirmed positive payments.
- *    Unavailable metrics are excluded and the remaining weights are normalized.
+ *    Unavailable metrics are excluded without redistributing their weights.
  *  - periodPerformance uses commitment-weighted achieved/projected ratios, then applies those metric weights.
  */
 export function buildReport({ employees, submissions, from, to, settings, today }) {
