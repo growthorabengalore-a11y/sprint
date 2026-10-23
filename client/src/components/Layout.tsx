@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { FiGrid, FiUsers, FiFileText, FiTrendingUp, FiClock, FiCalendar, FiSettings, FiLogOut, FiMenu, FiX, FiHome, FiEdit3, FiCamera } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiFileText, FiTrendingUp, FiClock, FiCalendar, FiSettings, FiLogOut, FiMenu, FiX, FiHome, FiEdit3, FiCamera, FiBriefcase, FiSearch } from 'react-icons/fi';
 import { useAuth } from '../auth';
 
 const adminNav = [
   { to: '/admin', label: 'Dashboard', icon: FiGrid, end: true }, { to: '/admin/champs', label: 'Bangalore Champs', icon: FiUsers },
   { to: '/admin/sprint-reports', label: 'Sprint Reports', icon: FiFileText }, { to: '/admin/performance', label: 'Performance Reports', icon: FiTrendingUp },
+  { to: '/admin/clients', label: 'Clients', icon: FiBriefcase }, { to: '/admin/client-data', label: 'Client Data', icon: FiSearch },
   { to: '/admin/attendance', label: 'Attendance Dashboard', icon: FiClock }, { to: '/admin/attendance-reports', label: 'Attendance Reports', icon: FiCalendar },
   { to: '/admin/settings', label: 'Settings', icon: FiSettings },
 ];

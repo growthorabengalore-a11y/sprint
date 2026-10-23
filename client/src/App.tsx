@@ -11,10 +11,13 @@ import PerformanceReports from './pages/admin/PerformanceReports';
 import AttendanceDashboard from './pages/admin/AttendanceDashboard';
 import AttendanceReports from './pages/admin/AttendanceReports';
 import Settings from './pages/admin/Settings';
+import ClientsForm from './pages/admin/Clientsform';
+import Clientdata from './pages/admin/Clientdata';
 import Home from './pages/employee/Home';
 import Sprint from './pages/employee/Sprint';
 import Attendance from './pages/employee/Attendance';
 import Landing from './pages/Landing';
+import ClientIntake from './pages/ClientIntake';
 
 function Guard({ role, children }: { role: 'admin' | 'employee'; children: JSX.Element }) {
   const { user, loading } = useAuth();
@@ -33,6 +36,7 @@ export default function App() {
         <Route path="/login" element={user && !loading ? <Navigate to={user.mustChangePassword ? '/change-password' : user.role === 'admin' ? '/admin' : '/app'} replace /> : <Login />} />
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/landing" element={<Landing />} />
+        <Route path="/client-intake/:token" element={<ClientIntake />} />
         <Route path="/admin" element={<Guard role="admin"><Layout kind="admin" /></Guard>}>
           <Route index element={<Dashboard />} />
           <Route path="champs" element={<Employees />} />
@@ -41,6 +45,8 @@ export default function App() {
           <Route path="attendance" element={<AttendanceDashboard />} />
           <Route path="attendance-reports" element={<AttendanceReports />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="clients" element={<ClientsForm />} />
+          <Route path="client-data" element={<Clientdata />} />
         </Route>
         <Route path="/app" element={<Guard role="employee"><Layout kind="employee" /></Guard>}>
           <Route index element={<Home />} />

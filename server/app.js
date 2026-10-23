@@ -10,11 +10,19 @@ import sprints from './routes/sprints.js';
 import attendance from './routes/attendance.js';
 import settings from './routes/settings.js';
 import dashboard from './routes/dashboard.js';
+import clients from './routes/clients.js';
 
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        frameSrc: ["'self'", 'blob:'],
+      },
+    },
+  }));
   app.use(cors({ origin: env.frontendUrl, credentials: false }));
   app.use(express.json({ limit: '200kb' }));
   app.use(rateLimit({ windowMs: 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false }));
@@ -26,6 +34,7 @@ export function createApp() {
   app.use('/api/attendance', attendance);
   app.use('/api/settings', settings);
   app.use('/api/dashboard', dashboard);
+  app.use('/api/clients', clients);
   app.use((_q, _r, next) => next(Object.assign(new Error('Not found'), { status: 404 })));
   app.use(errorHandler);
   return app;

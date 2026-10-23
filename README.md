@@ -36,6 +36,10 @@ Camera access needs HTTPS or `localhost`. For production serve the built client 
 
 If `loadFromUri` cannot find models, check the file names in `client/public/models` match `tiny_face_detector_model.json`, `face_landmark_68_model.json`, `face_recognition_model.json` + their `.bin` shards (the download script saves what the manifests list).
 
+## Client records
+
+Admins can manage clients from **Clients** and search individual records in **Client Data**. Shared intake links are reusable; submissions are validated and stored as client records. One image or PDF (up to 10 MB) is saved under `UPLOAD_DIR/clients`, while MongoDB stores its server URL and file metadata. For deployments with an ephemeral filesystem, configure `UPLOAD_DIR` to a persistent disk mount so uploaded files remain available after restarts.
+
 ## Login flow
 Admin logs in with `ADMIN_ID` + password. Admin creates employees in **Bangalore Champs** (Name, Email, Phone). IDs `Growthora261, 262, …` come from an atomic counter (never reused; delete = archive). A one-time temporary password is shown; the employee logs in with **Employee ID + password** and must set a new password first. Account lock after configurable failed attempts; rate limiting on login/face endpoints.
 
