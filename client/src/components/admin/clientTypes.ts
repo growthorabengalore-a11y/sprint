@@ -6,8 +6,7 @@ export type ClientRecord = {
   companyName: string;
   phone: string;
   email: string;
-  address: string;
-  note: string;
+  browser: string;
   filedDate: string;
   attachment: { url: string; name: string; mimeType: string } | null;
   status: ClientStatus;

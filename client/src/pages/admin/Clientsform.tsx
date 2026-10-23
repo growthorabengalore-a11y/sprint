@@ -1,20 +1,23 @@
 import { useMemo, useState } from 'react';
-import { FiChevronLeft, FiChevronRight, FiPlus, FiShare2, FiEye, FiColumns } from 'react-icons/fi';
+import { FiChevronLeft, FiChevronRight, FiPlus, FiShare2, FiEye, FiColumns, FiDownload } from 'react-icons/fi';
+import * as XLSX from 'xlsx';
 import { api, errMsg } from '../../api';
 import { useFetch } from '../../components/useFetch';
 import { Confirm, Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
 import ClientDetails from '../../components/admin/ClientDetails';
 import ClientForm from '../../components/admin/ClientForm';
+import ClientLogo from '../../components/admin/ClientLogo';
 import { ClientRecord, clientFile } from '../../components/admin/clientTypes';
 
 const LIMIT = 10;
 const columnOptions = [
-  ['name', 'Client name'], ['companyName', 'Company'], ['phone', 'Phone'], ['email', 'Email'],
+  ['logo', 'Logo'], ['name', 'Client name'], ['companyName', 'Company'], ['phone', 'Phone'], ['email', 'Email'],
   ['filedDate', 'Filed date'], ['status', 'Status'],
 ] as const;
 
 export default function ClientsForm() {
   const [page, setPage] = useState(1);
+  const [statsDate, setStatsDate] = useState('');
   const [filters, setFilters] = useState({ name: '', companyName: '', phone: '', email: '', status: 'All' });
   const [columns, setColumns] = useState<string[]>(columnOptions.map(([key]) => key));
   const [selected, setSelected] = useState<ClientRecord | null>(null);
@@ -24,6 +27,7 @@ export default function ClientsForm() {
   const [busy, setBusy] = useState(false);
   const params = useMemo(() => ({ ...filters, page, limit: LIMIT }), [filters, page]);
   const { data, loading, error, reload } = useFetch('/clients', params);
+  const summary = useFetch('/clients/summary', statsDate ? { date: statsDate } : {});
   const clients: ClientRecord[] = data?.items || [];
   const totalPages = Math.max(1, Math.ceil((data?.total || 0) / LIMIT));
 
@@ -37,6 +41,7 @@ export default function ClientsForm() {
     setEditor(null);
     if (client) setSelected(client);
     reload();
+    summary.reload();
     toast('Client saved successfully');
   };
   const removeClient = async () => {
@@ -48,6 +53,7 @@ export default function ClientsForm() {
       setSelected(null);
       setDeletePrompt(false);
       reload();
+      summary.reload();
     } catch (e) { toast(errMsg(e), 'err'); }
     finally { setBusy(false); }
   };
@@ -63,8 +69,36 @@ export default function ClientsForm() {
     try { await navigator.clipboard.writeText(share); toast('Form link copied'); }
     catch { toast('Could not copy automatically. Select and copy the link.', 'err'); }
   };
+  const downloadExcel = async () => {
+    setBusy(true);
+    try {
+      const { data: response } = await api.get('/clients/export', { params: filters });
+      const rows = (response.items as ClientRecord[]).map((client) => ({
+        'Client name': client.name,
+        'Company name': client.companyName,
+        'Phone number': client.phone,
+        Email: client.email,
+        Browser: client.browser || 'Not provided',
+        'Filed date': clientFile(client.filedDate),
+        Status: client.status,
+        'Logo / document': client.attachment?.url || '',
+        'Submitted at': new Date(client.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      }));
+      const sheet = XLSX.utils.json_to_sheet(rows, {
+        header: ['Client name', 'Company name', 'Phone number', 'Email', 'Browser', 'Filed date', 'Status', 'Logo / document', 'Submitted at'],
+      });
+      sheet['!cols'] = [{ wch: 24 }, { wch: 28 }, { wch: 16 }, { wch: 30 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 38 }, { wch: 24 }];
+      sheet['!autofilter'] = { ref: sheet['!ref'] || 'A1:I1' };
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Clients');
+      XLSX.writeFile(workbook, `Clients-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast(`Downloaded ${rows.length} matching client${rows.length === 1 ? '' : 's'}`);
+    } catch (e) { toast(errMsg(e), 'err'); }
+    finally { setBusy(false); }
+  };
   const statusChanged = (client: ClientRecord) => { setSelected(client); reload(); };
   const renderCell = (client: ClientRecord, key: string) => {
+    if (key === 'logo') return <ClientLogo client={client} />;
     if (key === 'name') return client.name;
     if (key === 'companyName') return client.companyName;
     if (key === 'phone') return client.phone;
@@ -78,16 +112,34 @@ export default function ClientsForm() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-xl font-bold">Clients</h1><p className="text-sm text-slate-500">Create, search, and manage client records.</p></div>
         <div className="flex flex-wrap gap-2">
+          <button className="btn btn-ghost" disabled={busy} onClick={downloadExcel}><FiDownload /> {busy ? 'Preparing…' : 'Download Excel'}</button>
           <button className="btn btn-ghost" disabled={busy} onClick={openShare}><FiShare2 /> Share client form</button>
           <button className="btn btn-primary" onClick={() => setEditor('create')}><FiPlus /> Create client</button>
         </div>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div><label className="label" htmlFor="client-stats-date">Filter summary by submission date</label><input id="client-stats-date" type="date" className="input !w-auto" value={statsDate} onChange={(event) => setStatsDate(event.target.value)} /></div>
+        {statsDate && <button className="btn btn-ghost" onClick={() => setStatsDate('')}>All dates</button>}
+      </div>
+      {summary.error && <ErrorBox text={summary.error} onRetry={summary.reload} />}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[
+          [statsDate ? 'Clients submitted on selected date' : 'Total clients', summary.data?.summary.totalClients],
+          [statsDate ? 'Unique clients on selected date' : 'Unique clients', summary.data?.summary.uniqueClients],
+          [statsDate ? 'Submissions on selected date' : "Today's submissions", statsDate ? summary.data?.summary.totalClients : summary.data?.summary.todaySubmitted],
+        ].map(([label, value]) => (
+          <div key={label as string} className="card p-4">
+            <div className="text-xs font-semibold text-slate-500">{label}</div>
+            {summary.loading && !summary.data ? <Skeleton className="mt-2 h-7 w-16" /> : <div className="mt-1 text-2xl font-extrabold">{value ?? '—'}</div>}
+          </div>
+        ))}
       </div>
       <div className="card space-y-3 p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {([
             ['name', 'Client name'], ['companyName', 'Company name'], ['phone', 'Phone number'], ['email', 'Email'],
           ] as const).map(([key, label]) => <input key={key} className="input" placeholder={`Filter by ${label.toLowerCase()}`} value={filters[key]} onChange={(event) => updateFilter(key, event.target.value)} />)}
-          <select className="input" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}>
+          <select aria-label="Filter clients by status" className="input sm:col-span-2 lg:col-span-1" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}>
             {['All', 'Draft', 'Active', 'Blocked', 'Completed', 'On Hold'].map((status) => <option key={status}>{status}</option>)}
           </select>
         </div>
@@ -111,7 +163,7 @@ export default function ClientsForm() {
             </table>
           </div>
           <div className="space-y-3 md:hidden">{clients.map((client) => <button key={client.id} className="card block w-full p-4 text-left" onClick={() => setSelected(client)}>
-            <div className="flex items-start justify-between gap-2"><div><div className="font-bold">{client.name}</div><div className="text-sm text-slate-600">{client.companyName}</div></div><span className="rounded-full bg-crimson-50 px-2 py-1 text-xs font-semibold text-crimson-700">{client.status}</span></div>
+            <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-3"><ClientLogo client={client} /><div className="min-w-0"><div className="break-words font-bold">{client.name}</div><div className="text-sm text-slate-600">{client.companyName}</div></div></div><span className="shrink-0 rounded-full bg-crimson-50 px-2 py-1 text-xs font-semibold text-crimson-700">{client.status}</span></div>
             <div className="mt-2 break-all text-sm">{client.email}</div><div className="text-sm">{client.phone}</div><div className="mt-2 text-xs text-slate-500">Filed {clientFile(client.filedDate)}</div>
           </button>)}</div>
           <div className="flex flex-wrap items-center justify-between gap-2">

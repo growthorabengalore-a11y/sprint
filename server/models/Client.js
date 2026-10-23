@@ -5,8 +5,7 @@ const schema = new mongoose.Schema({
   companyName: { type: String, required: true, trim: true, maxlength: 150 },
   phone: { type: String, required: true, match: /^[6-9]\d{9}$/ },
   email: { type: String, required: true, trim: true, lowercase: true, maxlength: 200 },
-  address: { type: String, required: true, trim: true, maxlength: 1000 },
-  note: { type: String, trim: true, maxlength: 2000, default: '' },
+  browser: { type: String, trim: true, maxlength: 100, default: 'Not provided' },
   filedDate: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
   attachment: {
     path: { type: String, default: null },

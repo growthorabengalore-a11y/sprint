@@ -10,6 +10,8 @@ import { ClientIntakeLink } from '../models/ClientIntakeLink.js';
 import { audit } from '../models/AuditLog.js';
 import { HttpError, wrap, requireAuth, requireRole } from '../middleware/auth.js';
 import { uploadRoot } from '../services/faceFiles.js';
+import { getSettings } from '../services/settings.js';
+import { isValidDateKey, localDateKey } from '../utils/time.js';
 
 const r = Router();
 const publicIntakeLimit = rateLimit({
@@ -33,8 +35,7 @@ const clientSchema = z.object({
   companyName: z.string().trim().min(1).max(150),
   phone: z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a valid 10-digit mobile number'),
   email: z.string().trim().email().max(200),
-  address: z.string().trim().min(1).max(1000),
-  note: z.string().trim().max(2000).optional().default(''),
+  browser: z.string().trim().min(1).max(100),
   filedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid filed date')
     .refine((value) => {
       const date = new Date(`${value}T00:00:00.000Z`);
@@ -48,8 +49,7 @@ const safeView = (client) => ({
   companyName: client.companyName,
   phone: client.phone,
   email: client.email,
-  address: client.address,
-  note: client.note,
+  browser: client.browser || 'Not provided',
   filedDate: client.filedDate,
   attachment: client.attachment?.path ? {
     url: client.attachment.url?.replace(/^\/api(?=\/)/, '') || `/clients/${client._id}/file`,
@@ -112,8 +112,7 @@ function parseClientBody(body) {
     companyName: String(body.companyName ?? ''),
     phone: String(body.phone ?? ''),
     email: String(body.email ?? ''),
-    address: String(body.address ?? ''),
-    note: String(body.note ?? ''),
+    browser: String(body.browser ?? ''),
     filedDate: String(body.filedDate ?? ''),
   });
 }
@@ -161,6 +160,11 @@ r.get('/intake-link', wrap(async (_req, res) => {
   res.json({ ok: true, token: link.token });
 }));
 
+r.get('/export', wrap(async (req, res) => {
+  const clients = await Client.find(queryFilter(req.query)).sort({ createdAt: -1, _id: -1 });
+  res.json({ ok: true, items: clients.map(safeView), total: clients.length });
+}));
+
 r.get('/', wrap(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
@@ -170,6 +174,28 @@ r.get('/', wrap(async (req, res) => {
     Client.countDocuments(filter),
   ]);
   res.json({ ok: true, items: clients.map(safeView), total, page, limit });
+}));
+
+r.get('/summary', wrap(async (req, res) => {
+  const settings = await getSettings();
+  const today = localDateKey(new Date(), settings.timezone);
+  const requestedDate = req.query.date ? String(req.query.date) : '';
+  if (requestedDate && !isValidDateKey(requestedDate)) throw new HttpError(400, 'Invalid summary date');
+  const pipeline = [
+    { $addFields: { submittedDate: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: settings.timezone } } } },
+  ];
+  if (requestedDate) pipeline.push({ $match: { submittedDate: requestedDate } });
+  pipeline.push(
+    { $group: {
+      _id: null,
+      totalClients: { $sum: 1 },
+      uniquePhones: { $addToSet: '$phone' },
+      todaySubmitted: { $sum: { $cond: [{ $eq: ['$submittedDate', today] }, 1, 0] } },
+    } },
+    { $project: { _id: 0, totalClients: 1, uniqueClients: { $size: '$uniquePhones' }, todaySubmitted: 1 } },
+  );
+  const [result] = await Client.aggregate(pipeline);
+  res.json({ ok: true, date: requestedDate || null, summary: result || { totalClients: 0, uniqueClients: 0, todaySubmitted: 0 } });
 }));
 
 r.get('/search', wrap(async (req, res) => {

@@ -37,9 +37,8 @@ export default function ClientDetails({ client, onEdit, onDelete, onStatus, onCl
       </section>
       <dl className="grid gap-x-4 gap-y-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
         <Detail label="Phone" value={client.phone} /><Detail label="Email" value={client.email} />
+        <Detail label="Browser" value={client.browser || 'Not provided'} />
         <Detail label="Filed date" value={clientFile(client.filedDate)} /><Detail label="Created" value={new Date(client.createdAt).toLocaleDateString('en-GB')} />
-        <div className="sm:col-span-2"><Detail label="Address" value={client.address} /></div>
-        <div className="sm:col-span-2"><Detail label="Note" value={client.note || '—'} /></div>
       </dl>
       <section><h3 className="mb-2 font-bold">Company logo / document</h3><ClientAttachment client={client} /></section>
       <section><h3 className="mb-2 font-bold">Client actions</h3><div className="flex flex-wrap gap-2">

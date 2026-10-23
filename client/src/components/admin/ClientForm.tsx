@@ -19,8 +19,7 @@ export default function ClientForm({ initial, onSaved, onCancel, submitLabel = '
     companyName: initial?.companyName || '',
     phone: initial?.phone || '',
     email: initial?.email || '',
-    address: initial?.address || '',
-    note: initial?.note || '',
+    browser: initial?.browser || (initial ? 'Not provided' : ''),
     filedDate: initial?.filedDate || new Date().toISOString().slice(0, 10),
   });
   const update = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
@@ -58,6 +57,7 @@ export default function ClientForm({ initial, onSaved, onCancel, submitLabel = '
         <Field label="Company name"><input className="input" required maxLength={150} value={values.companyName} onChange={(e) => update('companyName', e.target.value)} /></Field>
         <Field label="Phone number (10 digits)"><input className="input" type="tel" inputMode="numeric" required maxLength={10} pattern="[6-9][0-9]{9}" value={values.phone} onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))} /></Field>
         <Field label="Email"><input className="input" type="email" required maxLength={200} value={values.email} onChange={(e) => update('email', e.target.value)} /></Field>
+        <Field label="Browser"><input className="input" required maxLength={100} placeholder="Enter browser (for example, Chrome)" value={values.browser} onChange={(e) => update('browser', e.target.value)} /></Field>
         <Field label="Filed date (DD/MM/YYYY)"><input className="input" type="date" required value={values.filedDate} onChange={(e) => update('filedDate', e.target.value)} /></Field>
         <Field label="Company logo / document (one image or PDF, max 10 MB)">
           <input className="input" type="file" accept="image/*,application/pdf,.pdf" onChange={(e) => {
@@ -75,8 +75,6 @@ export default function ClientForm({ initial, onSaved, onCancel, submitLabel = '
           {file && <div className="mt-1 text-xs text-slate-600">Selected: {file.name}</div>}
         </Field>
       </div>
-      <Field label="Address"><textarea className="input min-h-20" required maxLength={1000} value={values.address} onChange={(e) => update('address', e.target.value)} /></Field>
-      <Field label="Note"><textarea className="input min-h-20" maxLength={2000} value={values.note} onChange={(e) => update('note', e.target.value)} /></Field>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div className="flex flex-wrap justify-end gap-2">
         {onCancel && <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>}
