@@ -13,13 +13,12 @@ type Props = {
 export default function ClientForm({ initial, onSaved, onCancel, submitLabel = 'Save client', onSubmit }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [file, setFile] = useState<File | null>(null);
   const [values, setValues] = useState({
     name: initial?.name || '',
     companyName: initial?.companyName || '',
     phone: initial?.phone || '',
     email: initial?.email || '',
-    browser: initial?.browser || (initial ? 'Not provided' : ''),
+    browser: ['Mozilla Firefox', 'Safari', 'Google Chrome'].includes(initial?.browser || '') ? initial?.browser || '' : '',
     filedDate: initial?.filedDate || new Date().toISOString().slice(0, 10),
   });
   const update = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
@@ -32,7 +31,6 @@ export default function ClientForm({ initial, onSaved, onCancel, submitLabel = '
     setBusy(true);
     const body = new FormData();
     Object.entries(values).forEach(([key, value]) => body.append(key, value));
-    if (file) body.append('attachment', file);
     try {
       if (onSubmit) {
         await onSubmit(body);
@@ -57,23 +55,15 @@ export default function ClientForm({ initial, onSaved, onCancel, submitLabel = '
         <Field label="Company name"><input className="input" required maxLength={150} value={values.companyName} onChange={(e) => update('companyName', e.target.value)} /></Field>
         <Field label="Phone number (10 digits)"><input className="input" type="tel" inputMode="numeric" required maxLength={10} pattern="[6-9][0-9]{9}" value={values.phone} onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))} /></Field>
         <Field label="Email"><input className="input" type="email" required maxLength={200} value={values.email} onChange={(e) => update('email', e.target.value)} /></Field>
-        <Field label="Browser"><input className="input" required maxLength={100} placeholder="Enter browser (for example, Chrome)" value={values.browser} onChange={(e) => update('browser', e.target.value)} /></Field>
-        <Field label="Filed date (DD/MM/YYYY)"><input className="input" type="date" required value={values.filedDate} onChange={(e) => update('filedDate', e.target.value)} /></Field>
-        <Field label="Company logo / document (one image or PDF, max 10 MB)">
-          <input className="input" type="file" accept="image/*,application/pdf,.pdf" onChange={(e) => {
-            const selected = e.target.files?.[0] || null;
-            if (selected && selected.size > 10 * 1024 * 1024) {
-              setError('The selected file is larger than 10 MB.');
-              e.target.value = '';
-              setFile(null);
-              return;
-            }
-            setError('');
-            setFile(selected);
-          }} />
-          {initial?.attachment && <div className="mt-1 text-xs text-slate-500">Current file: {initial.attachment.name}. Select a file to replace it.</div>}
-          {file && <div className="mt-1 text-xs text-slate-600">Selected: {file.name}</div>}
+        <Field label="Browser">
+          <select className="input" required value={values.browser} onChange={(e) => update('browser', e.target.value)}>
+            <option value="" disabled>Select a browser</option>
+            <option value="Mozilla Firefox">Mozilla Firefox</option>
+            <option value="Safari">Safari</option>
+            <option value="Google Chrome">Google Chrome</option>
+          </select>
         </Field>
+        <Field label="Filed date (DD/MM/YYYY)"><input className="input" type="date" required value={values.filedDate} onChange={(e) => update('filedDate', e.target.value)} /></Field>
       </div>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div className="flex flex-wrap justify-end gap-2">

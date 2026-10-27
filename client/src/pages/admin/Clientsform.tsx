@@ -17,7 +17,6 @@ const columnOptions = [
 
 export default function ClientsForm() {
   const [page, setPage] = useState(1);
-  const [statsDate, setStatsDate] = useState('');
   const [filters, setFilters] = useState({ name: '', companyName: '', phone: '', email: '', status: 'All' });
   const [columns, setColumns] = useState<string[]>(columnOptions.map(([key]) => key));
   const [selected, setSelected] = useState<ClientRecord | null>(null);
@@ -27,7 +26,7 @@ export default function ClientsForm() {
   const [busy, setBusy] = useState(false);
   const params = useMemo(() => ({ ...filters, page, limit: LIMIT }), [filters, page]);
   const { data, loading, error, reload } = useFetch('/clients', params);
-  const summary = useFetch('/clients/summary', statsDate ? { date: statsDate } : {});
+  const summary = useFetch('/clients/summary');
   const clients: ClientRecord[] = data?.items || [];
   const totalPages = Math.max(1, Math.ceil((data?.total || 0) / LIMIT));
 
@@ -117,16 +116,22 @@ export default function ClientsForm() {
           <button className="btn btn-primary" onClick={() => setEditor('create')}><FiPlus /> Create client</button>
         </div>
       </div>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><label className="label" htmlFor="client-stats-date">Filter summary by submission date</label><input id="client-stats-date" type="date" className="input !w-auto" value={statsDate} onChange={(event) => setStatsDate(event.target.value)} /></div>
-        {statsDate && <button className="btn btn-ghost" onClick={() => setStatsDate('')}>All dates</button>}
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-crimson-100 bg-gradient-to-r from-white via-crimson-50/60 to-white p-4 shadow-sm sm:p-5">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-crimson-100 bg-white p-2 shadow-sm sm:h-20 sm:w-20">
+          <img src="/assets/images/logo.jpeg" alt="Growthora logo" className="h-full w-full object-contain" />
+        </div>
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-crimson-600">Growthora</div>
+          <h2 className="mt-1 text-lg font-bold text-slate-900 sm:text-xl">Sprint &amp; Attendance</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Client management overview</p>
+        </div>
       </div>
       {summary.error && <ErrorBox text={summary.error} onRetry={summary.reload} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          [statsDate ? 'Clients submitted on selected date' : 'Total clients', summary.data?.summary.totalClients],
-          [statsDate ? 'Unique clients on selected date' : 'Unique clients', summary.data?.summary.uniqueClients],
-          [statsDate ? 'Submissions on selected date' : "Today's submissions", statsDate ? summary.data?.summary.totalClients : summary.data?.summary.todaySubmitted],
+          ['Total clients', summary.data?.summary.totalClients],
+          ['Unique clients', summary.data?.summary.uniqueClients],
+          ["Today's submissions", summary.data?.summary.todaySubmitted],
         ].map(([label, value]) => (
           <div key={label as string} className="card p-4">
             <div className="text-xs font-semibold text-slate-500">{label}</div>

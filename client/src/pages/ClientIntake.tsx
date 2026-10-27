@@ -12,7 +12,7 @@ export default function ClientIntake() {
   return (
     <main className="min-h-screen bg-crimson-50 p-4 sm:p-8">
       <div className="card mx-auto max-w-3xl p-4 sm:p-7">
-        <div className="mb-5"><div className="text-sm font-semibold text-crimson-700">Growthora</div><h1 className="text-2xl font-bold">Client creation form</h1><p className="mt-1 text-sm text-slate-500">Enter your details below. You may attach one image or PDF.</p></div>
+        <div className="mb-5"><div className="text-sm font-semibold text-crimson-700">Growthora</div><h1 className="text-2xl font-bold">Client creation form</h1><p className="mt-1 text-sm text-slate-500">Enter your details below.</p></div>
         <ClientForm
           submitLabel="Submit client details"
           onSubmit={async (body) => { await api.post(`/clients/public/${encodeURIComponent(token)}`, body); }}
