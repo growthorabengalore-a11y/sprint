@@ -122,7 +122,7 @@ export default function ClientsForm() {
         </div>
         <div>
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-crimson-600">Growthora</div>
-          <h2 className="mt-1 text-lg font-bold text-slate-900 sm:text-xl">Sprint &amp; Attendance</h2>
+         
           <p className="mt-0.5 text-sm text-slate-500">Client management overview</p>
         </div>
       </div>
