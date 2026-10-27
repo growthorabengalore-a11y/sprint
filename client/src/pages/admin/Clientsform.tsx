@@ -11,7 +11,7 @@ import { ClientRecord, clientFile } from '../../components/admin/clientTypes';
 
 const LIMIT = 10;
 const columnOptions = [
-  ['logo', 'Logo'], ['name', 'Client name'], ['companyName', 'Company'], ['phone', 'Phone'], ['email', 'Email'],
+  ['name', 'Client name'], ['companyName', 'Company'], ['phone', 'Phone'], ['email', 'Email'],
   ['filedDate', 'Filed date'], ['status', 'Status'],
 ] as const;
 
@@ -97,7 +97,6 @@ export default function ClientsForm() {
   };
   const statusChanged = (client: ClientRecord) => { setSelected(client); reload(); };
   const renderCell = (client: ClientRecord, key: string) => {
-    if (key === 'logo') return <ClientLogo client={client} />;
     if (key === 'name') return client.name;
     if (key === 'companyName') return client.companyName;
     if (key === 'phone') return client.phone;
