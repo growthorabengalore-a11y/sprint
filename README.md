@@ -40,6 +40,10 @@ If `loadFromUri` cannot find models, check the file names in `client/public/mode
 
 Admins can manage clients from **Clients** and search individual records in **Client Data**. Client records include a browser field; address and note fields are not collected. The Clients page shows total records, distinct phone numbers (unique clients), and today's submissions in the configured timezone; an optional submission-date filter scopes the summary cards, and the status filter defaults to all clients. The full filtered client list can be exported to an Excel workbook. Shared intake links are reusable; submissions are validated and stored as client records. One image or PDF (up to 10 MB) is saved under `UPLOAD_DIR/clients`, while MongoDB stores its server URL and file metadata. For deployments with an ephemeral filesystem, configure `UPLOAD_DIR` to a persistent disk mount so uploaded files remain available after restarts.
 
+## Team leader targets
+
+Admins can create and manage teams from **Team Leader Target**. Each weekly target is divided evenly over Monday, Tuesday, Thursday, Friday, and Saturday. Multiple daily payments are saved separately per date, with an individual timestamp and counted amount for each payment; payments can be edited or deleted. Only counted amounts contribute to daily archived totals, analytics, and PNG reports. Team reports include target, archived payments, remaining amount, and achievement percentage for the selected date range; the all-team report supports custom start and end dates. Draft teams are saved separately from active teams and do not contribute to active dashboard totals.
+
 ## Login flow
 Admin logs in with `ADMIN_ID` + password. Admin creates employees in **Bangalore Champs** (Name, Email, Phone). IDs `Growthora261, 262, …` come from an atomic counter (never reused; delete = archive). A one-time temporary password is shown; the employee logs in with **Employee ID + password** and must set a new password first. Account lock after configurable failed attempts; rate limiting on login/face endpoints.
 

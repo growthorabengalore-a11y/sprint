@@ -11,6 +11,7 @@ import attendance from './routes/attendance.js';
 import settings from './routes/settings.js';
 import dashboard from './routes/dashboard.js';
 import clients from './routes/clients.js';
+import teams from './routes/teams.js';
 
 export function createApp() {
   const app = express();
@@ -35,6 +36,7 @@ export function createApp() {
   app.use('/api/settings', settings);
   app.use('/api/dashboard', dashboard);
   app.use('/api/clients', clients);
+  app.use('/api/teams', teams);
   app.use((_q, _r, next) => next(Object.assign(new Error('Not found'), { status: 404 })));
   app.use(errorHandler);
   return app;
