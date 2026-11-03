@@ -109,10 +109,9 @@ function ReportTable({ teams, range, title }: { teams: Team[]; range: DateRange;
         ))}
       </div>
       <table className="w-full border-collapse text-sm">
-        <thead><tr className="bg-crimson-50 text-left">{['Team Leader', 'Team Members', 'Target', 'Archived', 'Remaining', 'Achievement'].map((heading) => <th key={heading} className="border-b border-crimson-200 px-3 py-3 text-xs font-bold uppercase text-slate-600">{heading}</th>)}</tr></thead>
+        <thead><tr className="bg-crimson-50 text-left">{['Team Leader Name', 'Target', 'Archived', 'Remaining', 'Achievement Percentage'].map((heading) => <th key={heading} className="border-b border-crimson-200 px-3 py-3 text-xs font-bold uppercase text-slate-600">{heading}</th>)}</tr></thead>
         <tbody>{rows.map(({ team, totals }) => <tr key={team.id} className="border-b border-slate-100 align-top">
           <td className="px-3 py-3 font-bold">{team.leaderName}{team.status === 'draft' ? ' · Draft' : ''}</td>
-          <td className="px-3 py-3">{team.members.join(', ')}</td>
           <td className="px-3 py-3">{inr(totals.target)}</td><td className="px-3 py-3 font-semibold">{inr(totals.achieved)}</td><td className="px-3 py-3">{inr(totals.remaining)}</td>
           <td className={`px-3 py-3 font-bold ${totals.percent >= 100 ? 'text-emerald-700' : 'text-crimson-700'}`}>{pct(totals.percent)}</td>
         </tr>)}</tbody>
