@@ -13,6 +13,7 @@ type RangePreset = 'today' | 'monthToDate' | 'week' | 'month' | 'overall' | 'cus
 type DateRange = { from: string; to: string };
 
 const todayKey = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+const amountExcludingGst = (amount: number) => Math.round(amount * 100 / 118);
 const isWorkday = (date: string) => ![0, 3].includes(new Date(`${date}T00:00:00Z`).getUTCDay());
 const clampToday = (date: string, today: string) => date > today ? today : date;
 const firstOfMonth = (date: string) => `${date.slice(0, 7)}-01`;
@@ -369,7 +370,7 @@ export default function Teamtarget() {
                   <label className="label">Payment received (₹)<input className="input mt-1" type="number" inputMode="numeric" min="0" step="1" max="1000000000" value={entryValue} onChange={(e) => setEntryValue(e.target.value)} placeholder="Enter payment amount" /></label>
                   <div className="flex gap-2 self-end"><button className="btn btn-primary flex-1" type="submit" disabled={busy || !isWorkday(entryDate) || entryDate > today || entryValue === ''}><FiSave /> {busy ? 'Saving…' : editingPaymentId ? 'Save edit' : 'Add payment'}</button>{editingPaymentId && <button className="btn btn-ghost" type="button" onClick={() => { setEditingPaymentId(null); setEntryValue(''); }}>Cancel</button>}</div>
                 </form>
-                {entryValue !== '' && Number.isInteger(Number(entryValue)) && Number(entryValue) >= 0 && <p className="mt-2 text-xs font-semibold text-slate-600">Amount counted toward target: {inr(Math.round(Number(entryValue) * 82 / 100))}</p>}
+                {entryValue !== '' && Number.isInteger(Number(entryValue)) && Number(entryValue) >= 0 && <p className="mt-2 text-xs font-semibold text-slate-600">Amount counted toward target (excluding 18% GST): {inr(amountExcludingGst(Number(entryValue)))}</p>}
                 {!isWorkday(entryDate) && <p className="mt-2 text-xs font-semibold text-amber-700">Team targets are scheduled Monday, Tuesday, Thursday, Friday, and Saturday.</p>}
                 <div className="mt-4 border-t border-crimson-100 pt-3">
                   <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-sm font-bold">Payments for {fmtDate(entryDate)}</h4><span className="text-xs font-semibold text-slate-500">{selectedEntry?.payments.length || 0} entered · {inr(selectedEntry?.achieved || 0)} counted</span></div>

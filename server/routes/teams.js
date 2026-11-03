@@ -12,7 +12,7 @@ const validDateKey = (value) => isValidDateKey(value)
   && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
 const legacyPayment = (entry) => ({
   amount: entry.enteredAmount ?? entry.achieved,
-  countedAmount: entry.enteredAmount != null ? entry.achieved : amountForTarget(entry.achieved),
+  countedAmount: amountForTarget(entry.enteredAmount ?? entry.achieved),
   recordedAt: entry.recordedAt,
 });
 const migrateLegacyPayment = (entry) => {
@@ -35,6 +35,7 @@ const safeTeam = (team) => {
           achieved: sumCountedPayments(entry.payments),
           payments: entry.payments.map((payment) => ({
             ...payment,
+            countedAmount: amountForTarget(payment.amount),
             id: payment._id,
           })),
         };

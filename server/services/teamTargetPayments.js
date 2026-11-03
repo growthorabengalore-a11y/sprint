@@ -1,9 +1,9 @@
-export const NET_PAYMENT_PERCENT = 82;
+const GST_PERCENT = 18;
 
 export function amountForTarget(amount) {
-  return Math.round(amount * NET_PAYMENT_PERCENT / 100);
+  return Math.round(amount * 100 / (100 + GST_PERCENT));
 }
 
 export function sumCountedPayments(payments) {
-  return payments.reduce((total, payment) => total + payment.countedAmount, 0);
+  return payments.reduce((total, payment) => total + amountForTarget(payment.amount), 0);
 }
