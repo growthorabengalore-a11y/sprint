@@ -14,7 +14,7 @@ type DateRange = { from: string; to: string };
 
 const todayKey = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
 const amountExcludingGst = (amount: number) => Math.round(amount * 100 / 118);
-const isWorkday = (date: string) => ![0, 3].includes(new Date(`${date}T00:00:00Z`).getUTCDay());
+const isWorkday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() !== 0;
 const clampToday = (date: string, today: string) => date > today ? today : date;
 const firstOfMonth = (date: string) => `${date.slice(0, 7)}-01`;
 const weekStart = (date: string) => {
@@ -42,7 +42,7 @@ function workdaysBetween(range: DateRange, team: Team, today: string) {
 }
 
 function teamTotals(team: Team, range: DateRange, today: string) {
-  const target = workdaysBetween(range, team, today) * team.weeklyTarget / 5;
+  const target = workdaysBetween(range, team, today) * team.weeklyTarget / 6;
   const achieved = team.dailyEntries.reduce((sum, entry) => sum + (entry.date >= range.from && entry.date <= range.to && entry.date <= today ? entry.achieved : 0), 0);
   const percent = target ? achieved / target * 100 : 0;
   return { target, achieved, remaining: Math.max(target - achieved, 0), percent };
@@ -80,7 +80,7 @@ function TeamForm({ initial, onSave, onClose, busy }: {
       <div>
         <label className="label">Weekly Team Target (₹)</label>
         <input className="input" type="number" inputMode="numeric" min="1" step="1" max="1000000000" value={weeklyTarget} onChange={(e) => setWeeklyTarget(e.target.value)} placeholder="e.g. 300000" />
-        <p className="mt-1 text-xs text-slate-500">Split equally across Monday, Tuesday, Thursday, Friday, and Saturday. Daily target: {inr(Number(weeklyTarget || 0) / 5)}.</p>
+        <p className="mt-1 text-xs text-slate-500">Split equally across Monday through Saturday. Daily target: {inr(Number(weeklyTarget || 0) / 6)}.</p>
       </div>
       <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
         <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
@@ -116,7 +116,7 @@ function ReportTable({ teams, range, title }: { teams: Team[]; range: DateRange;
           <td className={`px-3 py-3 font-bold ${totals.percent >= 100 ? 'text-emerald-700' : 'text-crimson-700'}`}>{pct(totals.percent)}</td>
         </tr>)}</tbody>
       </table>
-      <p className="mt-6 text-xs text-slate-400">Daily target is weekly target ÷ 5 (Monday, Tuesday, Thursday, Friday, Saturday). Percentages can exceed 100%.</p>
+      <p className="mt-6 text-xs text-slate-400">Daily target is weekly target ÷ 6 (Monday through Saturday; Sunday is a holiday). Percentages can exceed 100%.</p>
     </div>
   );
 }
@@ -363,14 +363,14 @@ export default function Teamtarget() {
                 ].map(([label, value, Icon]: any) => <div key={label} className="rounded-xl bg-slate-50 p-3"><div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><Icon className="text-crimson-600" />{label}</div><div className={`mt-2 break-words text-lg font-extrabold ${label === 'Achievement' && selectedTotals && selectedTotals.percent >= 100 ? 'text-emerald-700' : ''}`}>{value}</div></div>)}
               </div>
               <div className="rounded-xl border border-crimson-100 bg-crimson-50/40 p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-bold">Enter today’s target achievement</h3><p className="text-xs text-slate-500">Add each payment as it arrives. Every payment is saved with its own timestamp.</p></div><div className="text-sm font-bold text-crimson-700">Daily target: {inr(selected.weeklyTarget / 5)}</div></div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-bold">Enter today’s target achievement</h3><p className="text-xs text-slate-500">Add each payment as it arrives. Every payment is saved with its own timestamp.</p></div><div className="text-sm font-bold text-crimson-700">Daily target: {inr(selected.weeklyTarget / 6)}</div></div>
                 <form onSubmit={saveDailyPayment} className="mt-3 grid gap-2 sm:grid-cols-[1fr_1.2fr_auto]">
                   <label className="label">Date<input className="input mt-1" type="date" max={today} value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /></label>
                   <label className="label">Payment received (₹)<input className="input mt-1" type="number" inputMode="numeric" min="0" step="1" max="1000000000" value={entryValue} onChange={(e) => setEntryValue(e.target.value)} placeholder="Enter payment amount" /></label>
                   <div className="flex gap-2 self-end"><button className="btn btn-primary flex-1" type="submit" disabled={busy || !isWorkday(entryDate) || entryDate > today || entryValue === ''}><FiSave /> {busy ? 'Saving…' : editingPaymentId ? 'Save edit' : 'Add payment'}</button>{editingPaymentId && <button className="btn btn-ghost" type="button" onClick={() => { setEditingPaymentId(null); setEntryValue(''); }}>Cancel</button>}</div>
                 </form>
                 {entryValue !== '' && Number.isInteger(Number(entryValue)) && Number(entryValue) >= 0 && <p className="mt-2 text-xs font-semibold text-slate-600">Amount counted toward target (excluding 18% GST): {inr(amountExcludingGst(Number(entryValue)))}</p>}
-                {!isWorkday(entryDate) && <p className="mt-2 text-xs font-semibold text-amber-700">Team targets are scheduled Monday, Tuesday, Thursday, Friday, and Saturday.</p>}
+                {!isWorkday(entryDate) && <p className="mt-2 text-xs font-semibold text-amber-700">Sunday is a holiday; team targets are scheduled Monday through Saturday.</p>}
                 <div className="mt-4 border-t border-crimson-100 pt-3">
                   <div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-sm font-bold">Payments for {fmtDate(entryDate)}</h4><span className="text-xs font-semibold text-slate-500">{selectedEntry?.payments.length || 0} entered · {inr(selectedEntry?.achieved || 0)} counted</span></div>
                   {selectedEntry?.payments.length ? <div className="space-y-2">{selectedEntry.payments.slice().sort((a, b) => b.recordedAt.localeCompare(a.recordedAt)).map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3">
@@ -385,7 +385,7 @@ export default function Teamtarget() {
                   <table className="w-full min-w-[560px]"><thead><tr>{['Date', 'Target', 'Archived', 'Remaining', 'Achievement', 'Last saved'].map((heading) => <th key={heading} className="th">{heading}</th>)}</tr></thead>
                     <tbody>{selected.dailyEntries.filter((entry) => entry.date >= selectedRange.from && entry.date <= selectedRange.to).sort((a, b) => b.date.localeCompare(a.date)).map((entry) => {
                       const achieved = entry.achieved;
-                      const target = selected.weeklyTarget / 5;
+                      const target = selected.weeklyTarget / 6;
                       const percent = target ? achieved / target * 100 : 0;
                       return <tr key={entry.date}><td className="td whitespace-nowrap">{fmtDate(entry.date)}</td><td className="td">{inr(target)}</td><td className="td font-semibold">{inr(achieved)}</td><td className="td">{inr(Math.max(target - achieved, 0))}</td><td className={`td font-bold ${percent >= 100 ? 'text-emerald-700' : ''}`}>{pct(percent)}</td><td className="td whitespace-nowrap text-xs text-slate-500">{fmtTime(entry.recordedAt)}</td></tr>;
                     })}{!selected.dailyEntries.some((entry) => entry.date >= selectedRange.from && entry.date <= selectedRange.to) && <tr><td className="td" colSpan={6}><Empty text="No daily achievements recorded for this range." /></td></tr>}</tbody>
