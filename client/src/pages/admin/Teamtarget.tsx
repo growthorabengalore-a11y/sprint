@@ -165,7 +165,7 @@ export default function Teamtarget() {
   const currentWeekRange = { from: weekStart(today), to: today };
   const weeklyTotals = activeTeams.reduce((totals, team) => {
     const current = teamTotals(team, currentWeekRange, today);
-    return { target: totals.target + current.target, achieved: totals.achieved + current.achieved };
+    return { target: totals.target + team.weeklyTarget, achieved: totals.achieved + current.achieved };
   }, { target: 0, achieved: 0 });
   const topTeam = activeTeams.map((team) => ({ team, totals: teamTotals(team, currentWeekRange, today) })).sort((a, b) => b.totals.percent - a.totals.percent)[0];
   const selectedEntry = selected?.dailyEntries.find((entry) => entry.date === entryDate);
