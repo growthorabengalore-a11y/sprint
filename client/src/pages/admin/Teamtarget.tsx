@@ -91,32 +91,81 @@ function TeamForm({ initial, onSave, onClose, busy }: {
   );
 }
 
+function ReportSection({ title, rows, includeDailyTargets = false }: {
+  title: string;
+  rows: { team: Team; totals: ReturnType<typeof teamTotals> }[];
+  includeDailyTargets?: boolean;
+}) {
+  const sum = (key: 'target' | 'achieved' | 'remaining') => rows.reduce((total, row) => total + row.totals[key], 0);
+  const target = sum('target');
+  const achieved = sum('achieved');
+  const percent = target ? achieved / target * 100 : null;
+  const headings = includeDailyTargets
+    ? ['Team Leader Name', 'Weekly Target', 'Daily Target', "Today's Target", "Today's Archived", 'Achievement %']
+    : ['Team Leader Name', 'Target', 'Archived', 'Remaining', 'Achievement %'];
+  return (
+    <section className="mt-6">
+      <h3 className="mb-2 text-lg font-bold">{title}</h3>
+      <table className="w-full border-collapse text-sm">
+        <thead><tr className="bg-crimson-50 text-left">{headings.map((heading) => <th key={heading} className="border-b border-crimson-200 px-3 py-3 text-xs font-bold uppercase text-slate-600">{heading}</th>)}</tr></thead>
+        <tbody>
+          {rows.map(({ team, totals }) => <tr key={team.id} className="border-b border-slate-100 align-top">
+            <td className="px-3 py-3 font-bold">{team.leaderName}{team.status === 'draft' ? ' · Draft' : ''}</td>
+            {includeDailyTargets ? <>
+              <td className="px-3 py-3">{inr(team.weeklyTarget)}</td>
+              <td className="px-3 py-3">{inr(team.weeklyTarget / 6)}</td>
+              <td className="px-3 py-3">{inr(totals.target)}</td>
+              <td className="px-3 py-3 font-semibold">{inr(totals.achieved)}</td>
+            </> : <>
+              <td className="px-3 py-3">{inr(totals.target)}</td>
+              <td className="px-3 py-3 font-semibold">{inr(totals.achieved)}</td>
+              <td className="px-3 py-3">{inr(totals.remaining)}</td>
+            </>}
+            <td className={`px-3 py-3 font-bold ${totals.percent >= 100 ? 'text-emerald-700' : 'text-crimson-700'}`}>{totals.target ? pct(totals.percent) : '—'}</td>
+          </tr>)}
+          <tr className="border-t-2 border-slate-300 bg-slate-50 font-extrabold">
+            <td className="px-3 py-3">TOTAL</td>
+            {includeDailyTargets ? <>
+              <td className="px-3 py-3">{inr(rows.reduce((total, row) => total + row.team.weeklyTarget, 0))}</td>
+              <td className="px-3 py-3">{inr(rows.reduce((total, row) => total + row.team.weeklyTarget / 6, 0))}</td>
+              <td className="px-3 py-3">{inr(target)}</td>
+              <td className="px-3 py-3">{inr(achieved)}</td>
+            </> : <>
+              <td className="px-3 py-3">{inr(target)}</td>
+              <td className="px-3 py-3">{inr(achieved)}</td>
+              <td className="px-3 py-3">{inr(sum('remaining'))}</td>
+            </>}
+            <td className="px-3 py-3">{percent == null ? '—' : pct(percent)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function ReportTable({ teams, range, title }: { teams: Team[]; range: DateRange; title: string }) {
   const today = todayKey();
-  const rows = teams.map((team) => ({ team, totals: teamTotals(team, range, today) }));
-  const sum = (key: 'target' | 'achieved' | 'remaining') => rows.reduce((total, row) => total + row.totals[key], 0);
-  const overallPercent = sum('target') ? sum('achieved') / sum('target') * 100 : 0;
+  const todayRange = { from: today, to: today };
+  const todayRows = teams.map((team) => ({ team, totals: teamTotals(team, todayRange, today) }));
+  const rangeRows = teams.map((team) => ({ team, totals: teamTotals(team, range, today) }));
+  const lifetimeRows = teams.map((team) => ({
+    team,
+    totals: teamTotals(team, { from: createdDate(team), to: today }, today),
+  }));
+  const isTodayRange = range.from === today && range.to === today;
+  const coversAllTeamHistory = teams.length > 0
+    && teams.every((team) => range.from <= createdDate(team) && range.to >= today);
   return (
-    <div className="w-[900px] bg-white p-10 text-slate-900">
+    <div className="w-[1000px] bg-white p-8 text-slate-900">
       <div className="border-b-4 border-crimson-600 pb-5">
         <div className="text-sm font-bold uppercase tracking-[0.2em] text-crimson-700">Growthora · Team Performance</div>
         <h2 className="mt-2 text-3xl font-extrabold">{title}</h2>
-        <p className="mt-1 text-sm text-slate-500">{fmtDate(range.from)} – {fmtDate(range.to)} · Generated {new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+        <p className="mt-1 text-sm text-slate-500">Selected period: {fmtDate(range.from)} – {fmtDate(range.to)} · Generated {new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
       </div>
-      <div className="my-6 grid grid-cols-4 gap-3">
-        {[['Target', sum('target')], ['Archived', sum('achieved')], ['Remaining', sum('remaining')], ['Achievement', overallPercent]].map(([label, amount]) => (
-          <div key={String(label)} className="rounded-lg bg-slate-50 p-4"><div className="text-xs font-bold uppercase text-slate-500">{label}</div><div className="mt-1 text-xl font-extrabold">{label === 'Achievement' ? `${Number(amount).toFixed(1)}%` : inr(Number(amount))}</div></div>
-        ))}
-      </div>
-      <table className="w-full border-collapse text-sm">
-        <thead><tr className="bg-crimson-50 text-left">{['Team Leader Name', 'Target', 'Archived', 'Remaining', 'Achievement Percentage'].map((heading) => <th key={heading} className="border-b border-crimson-200 px-3 py-3 text-xs font-bold uppercase text-slate-600">{heading}</th>)}</tr></thead>
-        <tbody>{rows.map(({ team, totals }) => <tr key={team.id} className="border-b border-slate-100 align-top">
-          <td className="px-3 py-3 font-bold">{team.leaderName}{team.status === 'draft' ? ' · Draft' : ''}</td>
-          <td className="px-3 py-3">{inr(totals.target)}</td><td className="px-3 py-3 font-semibold">{inr(totals.achieved)}</td><td className="px-3 py-3">{inr(totals.remaining)}</td>
-          <td className={`px-3 py-3 font-bold ${totals.percent >= 100 ? 'text-emerald-700' : 'text-crimson-700'}`}>{pct(totals.percent)}</td>
-        </tr>)}</tbody>
-      </table>
-      <p className="mt-6 text-xs text-slate-400">Daily target is weekly target ÷ 6 (Monday through Saturday; Sunday is a holiday). Percentages can exceed 100%.</p>
+      <ReportSection title="Today's performance (Sunday is a holiday)" rows={todayRows} includeDailyTargets />
+      {!isTodayRange && !coversAllTeamHistory && <ReportSection title="Selected-period performance" rows={rangeRows} />}
+      <ReportSection title="Overall performance to date" rows={lifetimeRows} />
+      <p className="mt-6 text-xs text-slate-400">Daily target is the weekly target ÷ 6 (Monday through Saturday). Overall target is accumulated from each team's creation date; archived amounts are counted excluding GST.</p>
     </div>
   );
 }
