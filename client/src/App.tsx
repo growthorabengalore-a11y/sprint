@@ -14,6 +14,7 @@ import Settings from './pages/admin/Settings';
 import ClientsForm from './pages/admin/Clientsform';
 import Clientdata from './pages/admin/Clientdata';
 import Teamtarget from './pages/admin/Teamtarget';
+import LeadsCRM from './pages/admin/LeadsCRM';
 import Home from './pages/employee/Home';
 import Sprint from './pages/employee/Sprint';
 import Attendance from './pages/employee/Attendance';
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="clients" element={<ClientsForm />} />
           <Route path="client-data" element={<Clientdata />} />
           <Route path="team-target" element={<Teamtarget />} />
+          <Route path="leads" element={<LeadsCRM />} />
         </Route>
         <Route path="/app" element={<Guard role="employee"><Layout kind="employee" /></Guard>}>
           <Route index element={<Home />} />
