@@ -15,6 +15,8 @@ import { computeRecord, lateInfo } from '../services/attendanceStatus.js';
 import { isWorkingDay } from '../services/performance.js';
 import { businessDateKey, isValidDateKey, rangeKeys } from '../utils/time.js';
 import { ATTENDANCE_NETWORK_MESSAGE, attendanceClientIp, isOfficeAttendanceNetwork } from '../utils/attendanceNetwork.js';
+import { AttendanceFallbackError, createAttendanceFallbackToken, verifyAttendanceFallbackToken } from '../services/attendanceFallback.js';
+import { env } from '../config/env.js';
 import { uploadRoot } from '../services/faceFiles.js';
 
 const r = Router();
@@ -25,7 +27,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1.5
 const dist = (a, b) => Math.sqrt(a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0));
 const descSchema = z.array(z.number().finite()).length(128);
 const view = (a, s) => a && ({ attendanceId: a._id, dateKey: a.dateKey, checkIn: a.checkIn, checkOut: a.checkOut, workingMinutes: a.workingMinutes, status: a.status,
-  verification: a.checkInVerification?.method === 'manual' || a.checkOutVerification?.method === 'manual' ? 'Manual' : 'Face',
+  verification: a.checkInVerification?.method === 'fallback' || a.checkOutVerification?.method === 'fallback' ? 'Self-marked'
+    : a.checkInVerification?.method === 'manual' || a.checkOutVerification?.method === 'manual' ? 'Manual' : 'Face',
   corrected: (a.corrections || []).length > 0, ...lateInfo(a.checkIn, s) });
 
 async function today(userId) {
@@ -46,6 +49,16 @@ r.get('/eligibility', ...emp, wrap(async (req, res) => {
     canCheckIn: attendanceNetworkAllowed && !att && req.user.faceRegistered,
     canCheckOut: attendanceNetworkAllowed && !!att?.checkIn && !att.checkOut, record: view(att, s),
     settings: { faceMatchThreshold: s.faceMatchThreshold, requireLiveness: s.requireLiveness }, serverTime: new Date().toISOString() });
+}));
+
+r.post('/fallback-session', ...emp, faceLimiter, wrap(async (req, res) => {
+  const { mode } = z.object({ mode: z.enum(['check-in', 'check-out']) }).parse(req.body);
+  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!req.user.faceRegistered) throw new HttpError(400, 'Register your face before taking attendance');
+  const { att } = await today(req.user._id);
+  if (mode === 'check-in' && att) throw new HttpError(409, 'Already checked in today');
+  if (mode === 'check-out' && (!att?.checkIn || att.checkOut)) throw new HttpError(409, 'No open check-in for today');
+  res.json(createAttendanceFallbackToken(req.user._id, mode, env.jwtSecret));
 }));
 
 r.post('/register-face', ...emp, faceLimiter, upload.array('images', 3), wrap(async (req, res) => {
@@ -104,6 +117,49 @@ r.post('/check-out', ...emp, faceLimiter, wrap(async (req, res) => {
     { checkOut: now, workingMinutes: rec.workingMinutes, status: rec.status, checkOutVerification: v }, { new: true });
   if (!a) throw new HttpError(409, 'Already checked out today');
   res.json({ ok: true, message: 'Checked out', record: view(a, s) });
+}));
+r.post('/fallback/:mode', ...emp, faceLimiter, wrap(async (req, res) => {
+  const mode = z.enum(['check-in', 'check-out']).parse(req.params.mode);
+  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!req.user.faceRegistered) throw new HttpError(400, 'Register your face before taking attendance');
+  const { fallbackToken } = z.object({ fallbackToken: z.string().min(1) }).parse(req.body);
+  try {
+    verifyAttendanceFallbackToken(fallbackToken, req.user._id, mode, env.jwtSecret);
+  } catch (error) {
+    if (error instanceof AttendanceFallbackError && error.code === 'WAIT') {
+      throw new HttpError(425, 'Please try face verification for at least 1 minute before marking attendance');
+    }
+    if (error instanceof AttendanceFallbackError) throw new HttpError(403, 'Fallback session is invalid or expired. Restart face verification.');
+    throw error;
+  }
+
+  const { s, dateKey, att } = await today(req.user._id);
+  const verification = { method: 'fallback', reason: 'Face verification unavailable after 1 minute' };
+  if (mode === 'check-in') {
+    if (att) throw new HttpError(409, 'Already checked in today');
+    try {
+      const a = await Attendance.create({ employee: req.user._id, dateKey, checkIn: new Date(), status: 'In Progress', checkInVerification: verification });
+      audit(req, 'attendance_fallback_checkin', req.user.employeeId);
+      res.status(201).json({ ok: true, message: 'Checked in', record: view(a, s) });
+    } catch (error) {
+      if (error.code === 11000) throw new HttpError(409, 'Already checked in today');
+      throw error;
+    }
+    return;
+  }
+
+  if (!att?.checkIn) throw new HttpError(409, 'No open check-in for today');
+  if (att.checkOut) throw new HttpError(409, 'Already checked out today');
+  const now = new Date();
+  const rec = computeRecord({ checkIn: att.checkIn, checkOut: now }, s);
+  const updated = await Attendance.findOneAndUpdate(
+    { employee: req.user._id, dateKey, checkOut: null },
+    { checkOut: now, workingMinutes: rec.workingMinutes, status: rec.status, checkOutVerification: verification },
+    { new: true },
+  );
+  if (!updated) throw new HttpError(409, 'Already checked out today');
+  audit(req, 'attendance_fallback_checkout', req.user.employeeId);
+  res.json({ ok: true, message: 'Checked out', record: view(updated, s) });
 }));
 r.get('/my', ...emp, wrap(async (req, res) => {
   const s = await getSettings();

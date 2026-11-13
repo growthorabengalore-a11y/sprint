@@ -13,6 +13,7 @@ import dashboard from './routes/dashboard.js';
 import clients from './routes/clients.js';
 import teams from './routes/teams.js';
 import leads from './routes/leads.js';
+import employeeLeadUpdates from './routes/employeeLeadUpdates.js';
 
 export function createApp() {
   const app = express();
@@ -39,6 +40,7 @@ export function createApp() {
   app.use('/api/clients', clients);
   app.use('/api/teams', teams);
   app.use('/api/leads', leads);
+  app.use('/api/lead-updates', employeeLeadUpdates);
   app.use((_q, _r, next) => next(Object.assign(new Error('Not found'), { status: 404 })));
   app.use(errorHandler);
   return app;

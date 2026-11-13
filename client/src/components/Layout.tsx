@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { FiGrid, FiUsers, FiFileText, FiTrendingUp, FiClock, FiCalendar, FiSettings, FiLogOut, FiMenu, FiX, FiHome, FiEdit3, FiCamera, FiBriefcase, FiSearch, FiTarget, FiUserPlus } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiFileText, FiTrendingUp, FiClock, FiCalendar, FiSettings, FiLogOut, FiMenu, FiX, FiHome, FiEdit3, FiCamera, FiBriefcase, FiSearch, FiTarget, FiUserPlus, FiList } from 'react-icons/fi';
 import { useAuth } from '../auth';
 
 const adminNav = [
@@ -12,7 +12,7 @@ const adminNav = [
   { to: '/admin/attendance', label: 'Attendance Dashboard', icon: FiClock }, { to: '/admin/attendance-reports', label: 'Attendance Reports', icon: FiCalendar },
   { to: '/admin/settings', label: 'Settings', icon: FiSettings },
 ];
-const empNav = [{ to: '/app', label: 'Home', icon: FiHome, end: true }, { to: '/app/attendance', label: 'Take Attendance', icon: FiCamera }, { to: '/app/sprint', label: 'Update Sprint', icon: FiEdit3 }];
+const empNav = [{ to: '/app', label: 'Home', icon: FiHome, end: true }, { to: '/app/attendance', label: 'Take Attendance', icon: FiCamera }, { to: '/app/sprint', label: 'Update Sprint', icon: FiEdit3 }, { to: '/app/lead-updates', label: 'Lead Updates', icon: FiList }];
 
 export default function Layout({ kind }: { kind: 'admin' | 'employee' }) {
   const [open, setOpen] = useState(false);

@@ -4,6 +4,7 @@ import { FiDownload, FiEdit2, FiFilter, FiPlus, FiRefreshCw, FiTrash2, FiUsers }
 import { api, errMsg } from '../../api';
 import { Confirm, Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
 import { downloadPng } from '../../utils/exportPng';
+import EmployeeLeadUpdates from './EmployeeLeadUpdates';
 
 type LeadType = 'Cold' | 'Warm' | 'Hot';
 type LeadItem = { sharedTo: string; type: LeadType; remarks: string };
@@ -230,7 +231,7 @@ function ReportModal({ rows, range, onClose }: { rows: FilteredContact[]; range:
   );
 }
 
-export default function LeadsCRM() {
+function CRMLeadsContent() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -375,6 +376,19 @@ export default function LeadsCRM() {
       {selectedContact && <ContactDetails contact={selectedContact} onClose={() => setSelectedId(null)} onEdit={(update) => { setSelectedId(null); setUpdateTarget({ contactId: selectedContact.id, update }); }} />}
       {deleteTarget && <Confirm title="Delete CRM lead?" text={`Delete ${deleteTarget.name} and all of their daily lead records? This cannot be undone.`} busy={busy} onNo={() => setDeleteTarget(null)} onYes={() => void deleteContact()} />}
       {showReport && <ReportModal rows={filteredContacts} range={range} onClose={() => setShowReport(false)} />}
+    </div>
+  );
+}
+
+export default function LeadsCRM() {
+  const [tab, setTab] = useState<'crm' | 'employee'>('crm');
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b border-slate-200" role="tablist" aria-label="Leads management sections">
+        <button type="button" role="tab" aria-selected={tab === 'crm'} className={`border-b-2 px-4 py-2 text-sm font-semibold ${tab === 'crm' ? 'border-crimson-600 text-crimson-700' : 'border-transparent text-slate-500'}`} onClick={() => setTab('crm')}>CRM Leads</button>
+        <button type="button" role="tab" aria-selected={tab === 'employee'} className={`border-b-2 px-4 py-2 text-sm font-semibold ${tab === 'employee' ? 'border-crimson-600 text-crimson-700' : 'border-transparent text-slate-500'}`} onClick={() => setTab('employee')}>Employee Lead Updates</button>
+      </div>
+      {tab === 'crm' ? <CRMLeadsContent /> : <EmployeeLeadUpdates />}
     </div>
   );
 }

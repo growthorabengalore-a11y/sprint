@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-const verification = { method: { type: String, enum: ['face', 'manual'] }, distance: Number, liveness: Boolean, by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, reason: String };
+const verification = { method: { type: String, enum: ['face', 'manual', 'fallback'] }, distance: Number, liveness: Boolean, by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, reason: String };
 const schema = new mongoose.Schema({
   employee: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   dateKey: { type: String, required: true },

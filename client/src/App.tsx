@@ -15,6 +15,7 @@ import ClientsForm from './pages/admin/Clientsform';
 import Clientdata from './pages/admin/Clientdata';
 import Teamtarget from './pages/admin/Teamtarget';
 import LeadsCRM from './pages/admin/LeadsCRM';
+import LeadUpdates from './pages/employee/LeadUpdates';
 import Home from './pages/employee/Home';
 import Sprint from './pages/employee/Sprint';
 import Attendance from './pages/employee/Attendance';
@@ -56,6 +57,7 @@ export default function App() {
           <Route index element={<Home />} />
           <Route path="sprint" element={<Sprint />} />
           <Route path="attendance" element={<Attendance />} />
+          <Route path="lead-updates" element={<LeadUpdates />} />
         </Route>
         <Route path="*" element={<Navigate to="/landing" replace />} />
       </Routes>

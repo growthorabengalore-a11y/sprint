@@ -52,9 +52,22 @@ export function RegisterFaceModal({ onClose, onDone }: { onClose: () => void; on
 /** Check-in / check-out verification: liveness prompt -> quality check -> embedding -> server decides. */
 export function VerifyModal({ mode, requireLiveness, onClose, onDone }: { mode: 'check-in' | 'check-out'; requireLiveness: boolean; onClose: () => void; onDone: (r: any) => void }) {
   const { ref, ready, err } = useCamera(); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false); const [prompt, setPrompt] = useState('');
+  const [fallbackSession, setFallbackSession] = useState<{ token: string; availableAt: number } | null>(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!fallbackSession) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [fallbackSession]);
   const go = async () => {
     const v = ref.current!; setBusy(true); setMsg('');
     try {
+      let session = fallbackSession;
+      if (!session) {
+        const { data } = await api.post('/attendance/fallback-session', { mode });
+        session = data;
+        setFallbackSession(session);
+      }
       let live = false;
       if (requireLiveness) { const ch = randomChallenge(); setPrompt(challengeText(ch)); live = await runLiveness(v, ch); setPrompt(''); if (!live) { setMsg('Liveness check failed. Try again.'); return; } }
       let faces: any[] = [], issue: string | null = 'x';
@@ -64,13 +77,24 @@ export function VerifyModal({ mode, requireLiveness, onClose, onDone }: { mode: 
       onDone(data);
     } catch (e) { setMsg(errMsg(e)); } finally { setBusy(false); setPrompt(''); }
   };
+  const markWithoutFace = async () => {
+    if (!fallbackSession || now < fallbackSession.availableAt) return;
+    setBusy(true); setMsg('');
+    try {
+      const { data } = await api.post(`/attendance/fallback/${mode}`, { fallbackToken: fallbackSession.token });
+      onDone(data);
+    } catch (e) { setMsg(errMsg(e)); } finally { setBusy(false); }
+  };
+  const secondsLeft = fallbackSession ? Math.max(0, Math.ceil((fallbackSession.availableAt - now) / 1000)) : null;
   return (
     <Modal title={mode === 'check-in' ? 'Check in' : 'Check out'} onClose={onClose}>
-      {err ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{err}</div> : <>
-        <Video vref={ref} />
+      {err ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{err}</div> : <Video vref={ref} />}
         {prompt && <div className="my-2 rounded-lg bg-crimson-100 p-3 text-center text-lg font-bold text-crimson-700">{prompt}</div>}
         {msg && <div className="my-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-800">{msg} <span className="block text-xs">Still failing? Ask your admin for manual verification.</span></div>}
-        <button className="btn btn-primary mt-3 w-full" disabled={busy || !ready} onClick={go}>{busy ? 'Verifying…' : !ready ? 'Starting camera…' : mode === 'check-in' ? 'Verify & check in' : 'Verify & check out'}</button></>}
+        <button className="btn btn-primary mt-3 w-full" disabled={busy || !ready || !!err} onClick={go}>{busy ? 'Verifying…' : !ready ? 'Starting camera…' : mode === 'check-in' ? 'Verify & check in' : 'Verify & check out'}</button>
+        {fallbackSession && secondsLeft !== null && (secondsLeft > 0
+          ? <p className="mt-2 text-center text-xs text-slate-500">If face verification fails, manual marking becomes available in {secondsLeft}s.</p>
+          : <button className="btn btn-ghost mt-2 w-full !min-h-[36px] text-xs" disabled={busy} onClick={markWithoutFace}>{mode === 'check-in' ? 'Mark check-in without face' : 'Mark check-out without face'}</button>)}
     </Modal>
   );
 }
