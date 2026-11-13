@@ -14,7 +14,7 @@ import { getSettings } from '../services/settings.js';
 import { computeRecord, lateInfo } from '../services/attendanceStatus.js';
 import { isWorkingDay } from '../services/performance.js';
 import { businessDateKey, isValidDateKey, rangeKeys } from '../utils/time.js';
-import { ATTENDANCE_NETWORK_MESSAGE, isOfficeAttendanceNetwork } from '../utils/attendanceNetwork.js';
+import { ATTENDANCE_NETWORK_MESSAGE, attendanceClientIp, isOfficeAttendanceNetwork } from '../utils/attendanceNetwork.js';
 import { uploadRoot } from '../services/faceFiles.js';
 
 const r = Router();
@@ -39,9 +39,10 @@ async function today(userId) {
 const emp = [requireAuth, blockIfMustChange, requireRole('employee')];
 r.get('/eligibility', ...emp, wrap(async (req, res) => {
   const { s, dateKey, att } = await today(req.user._id);
-  const attendanceNetworkAllowed = isOfficeAttendanceNetwork(req.ip);
+  const attendanceNetworkIp = attendanceClientIp(req.ip, req.get('cf-connecting-ip'));
+  const attendanceNetworkAllowed = isOfficeAttendanceNetwork(attendanceNetworkIp);
   res.json({ ok: true, dateKey, faceRegistered: req.user.faceRegistered, attendanceNetworkAllowed,
-    attendanceNetworkIp: req.ip,
+    attendanceNetworkIp,
     canCheckIn: attendanceNetworkAllowed && !att && req.user.faceRegistered,
     canCheckOut: attendanceNetworkAllowed && !!att?.checkIn && !att.checkOut, record: view(att, s),
     settings: { faceMatchThreshold: s.faceMatchThreshold, requireLiveness: s.requireLiveness }, serverTime: new Date().toISOString() });
@@ -81,7 +82,7 @@ async function verifyFace(req, s) {
   return { method: 'face', distance: +best.toFixed(4), liveness };
 }
 r.post('/check-in', ...emp, faceLimiter, wrap(async (req, res) => {
-  if (!isOfficeAttendanceNetwork(req.ip)) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
   const s = await getSettings();
   const dateKey = businessDateKey(new Date(), s);
   const v = await verifyFace(req, s);
@@ -91,7 +92,7 @@ r.post('/check-in', ...emp, faceLimiter, wrap(async (req, res) => {
   } catch (e) { if (e.code === 11000) throw new HttpError(409, 'Already checked in today'); throw e; }
 }));
 r.post('/check-out', ...emp, faceLimiter, wrap(async (req, res) => {
-  if (!isOfficeAttendanceNetwork(req.ip)) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
   const s = await getSettings();
   const dateKey = businessDateKey(new Date(), s);
   const v = await verifyFace(req, s);
