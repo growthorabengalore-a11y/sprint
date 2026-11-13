@@ -15,6 +15,7 @@ export default function Attendance() {
   const hist = useFetch(r.from && r.to ? '/attendance/my' : null, r);
   const [modal, setModal] = useState<'register' | 'in' | 'out' | null>(null);
   const d = elig.data; const rec = d?.record;
+  const officeNetworkAllowed = d?.attendanceNetworkAllowed === true;
   if (elig.loading && !d) return <Skeleton className="h-40 w-full" />;
   if (elig.error) return <ErrorBox text={elig.error} onRetry={elig.reload} />;
   const afterAction = async (msg: string) => { setModal(null); toast(msg); await elig.reload(); hist.reload(); };
@@ -25,10 +26,11 @@ export default function Attendance() {
       <div className="card space-y-3 p-5">
         <div className="flex items-center justify-between"><div><div className="font-bold">{user.name}</div><div className="text-sm text-slate-500">{user.employeeId} · {fmtDate(d.dateKey)}</div></div>{rec ? <StatusBadge s={status} /> : <span className="text-sm text-slate-500">{status}</span>}</div>
         <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-sm"><div><div className="text-xs text-slate-500">Check-in</div>{fmtTime(rec?.checkIn)}{rec?.late && <span className="ml-1 text-xs text-red-600">late</span>}</div><div><div className="text-xs text-slate-500">Check-out</div>{fmtTime(rec?.checkOut)}</div><div><div className="text-xs text-slate-500">Working hours</div>{fmtHM(rec?.workingMinutes)}</div></div>
+        {!officeNetworkAllowed && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Please connect to office Itrosys 2 Wi-Fi and take attendance.</p>}
         {!d.faceRegistered && <button className="btn btn-ghost w-full" onClick={() => setModal('register')}><FiUserPlus /> Register My Face</button>}
         <div className="grid gap-2 sm:grid-cols-2">
-          <button className="btn btn-primary" disabled={!d.canCheckIn} onClick={() => setModal('in')}><FiLogIn /> Check In</button>
-          <button className="btn btn-primary" disabled={!d.canCheckOut} onClick={() => setModal('out')}><FiLogOut /> Check Out</button></div>
+          <button className="btn btn-primary" disabled={!officeNetworkAllowed || !d.canCheckIn} onClick={() => setModal('in')}><FiLogIn /> Check In</button>
+          <button className="btn btn-primary" disabled={!officeNetworkAllowed || !d.canCheckOut} onClick={() => setModal('out')}><FiLogOut /> Check Out</button></div>
         {rec?.checkOut && <p className="text-center text-xs text-slate-500">Done for today. Check-in reopens from 8:00 AM the next working day.</p>}
         {!d.faceRegistered && <p className="text-center text-xs text-slate-500">Register your face once to enable check-in.</p>}
       </div>
