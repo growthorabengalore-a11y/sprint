@@ -106,7 +106,7 @@ export default function LeadUpdates() {
           </table>
         </div>}
       </section>
-      <div className="fixed -left-[12000px] top-0 pointer-events-none" aria-hidden="true"><EmployeeLeadUpdatesPng ref={reportRef} name={user.name} items={sortedItems} /></div>
+      <div className="fixed -left-[12000px] top-0 pointer-events-none" aria-hidden="true"><EmployeeLeadUpdatesPng ref={reportRef} name={user.name} from={sortedItems[sortedItems.length - 1]?.dateKey || ''} to={sortedItems[0]?.dateKey || ''} items={sortedItems} /></div>
       {entering && <Modal title="Enter lead update" onClose={() => setEntering(false)}><LeadForm employeeName={user.name} busy={busy} onClose={() => setEntering(false)} onSubmit={save} /></Modal>}
     </div>
   );
