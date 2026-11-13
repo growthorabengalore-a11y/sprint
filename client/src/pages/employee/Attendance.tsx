@@ -26,7 +26,7 @@ export default function Attendance() {
       <div className="card space-y-3 p-5">
         <div className="flex items-center justify-between"><div><div className="font-bold">{user.name}</div><div className="text-sm text-slate-500">{user.employeeId} · {fmtDate(d.dateKey)}</div></div>{rec ? <StatusBadge s={status} /> : <span className="text-sm text-slate-500">{status}</span>}</div>
         <div className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-sm"><div><div className="text-xs text-slate-500">Check-in</div>{fmtTime(rec?.checkIn)}{rec?.late && <span className="ml-1 text-xs text-red-600">late</span>}</div><div><div className="text-xs text-slate-500">Check-out</div>{fmtTime(rec?.checkOut)}</div><div><div className="text-xs text-slate-500">Working hours</div>{fmtHM(rec?.workingMinutes)}</div></div>
-        {!officeNetworkAllowed && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Please connect to office Itrosys 2 Wi-Fi and take attendance.</p>}
+        {!officeNetworkAllowed && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Please connect to office Itrosys 2 Wi-Fi and take attendance.<span className="mt-1 block text-xs">IP detected by attendance server: {d.attendanceNetworkIp || 'unavailable'}</span></p>}
         {!d.faceRegistered && <button className="btn btn-ghost w-full" onClick={() => setModal('register')}><FiUserPlus /> Register My Face</button>}
         <div className="grid gap-2 sm:grid-cols-2">
           <button className="btn btn-primary" disabled={!officeNetworkAllowed || !d.canCheckIn} onClick={() => setModal('in')}><FiLogIn /> Check In</button>

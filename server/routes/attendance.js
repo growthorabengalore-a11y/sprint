@@ -41,6 +41,7 @@ r.get('/eligibility', ...emp, wrap(async (req, res) => {
   const { s, dateKey, att } = await today(req.user._id);
   const attendanceNetworkAllowed = isOfficeAttendanceNetwork(req.ip);
   res.json({ ok: true, dateKey, faceRegistered: req.user.faceRegistered, attendanceNetworkAllowed,
+    attendanceNetworkIp: req.ip,
     canCheckIn: attendanceNetworkAllowed && !att && req.user.faceRegistered,
     canCheckOut: attendanceNetworkAllowed && !!att?.checkIn && !att.checkOut, record: view(att, s),
     settings: { faceMatchThreshold: s.faceMatchThreshold, requireLiveness: s.requireLiveness }, serverTime: new Date().toISOString() });
