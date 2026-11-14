@@ -10,23 +10,35 @@ import { businessDateKey, isValidDateKey } from '../utils/time.js';
 
 const r = Router();
 const leadInput = z.object({
-  leadCount: z.number().int().min(1).max(100000),
+  leads: z.array(z.object({
   assignedTo: z.string().trim().min(1).max(100),
   leadStatus: z.enum(['Cold', 'Warm', 'Hot']),
   paymentStatus: z.string().trim().min(1).max(500),
+  }).strict()).min(1).max(100),
 }).strict();
 
 function safeUpdate(update, employee) {
+  const leads = Array.isArray(update.leads) && update.leads.length
+    ? update.leads
+    : [{
+      assignedTo: update.assignedTo || '—',
+      leadStatus: update.leadStatus || 'Cold',
+      paymentStatus: update.paymentStatus || '',
+      legacyCount: update.leadCount,
+    }];
   return {
     id: String(update._id),
     employeeId: String(employee._id),
     employeeName: employee.name,
     employeeCode: employee.employeeId,
     dateKey: update.dateKey,
-    leadCount: update.leadCount,
-    assignedTo: update.assignedTo,
-    leadStatus: update.leadStatus,
-    paymentStatus: update.paymentStatus,
+    leadCount: update.leadCount || leads.length,
+    leads: leads.map((lead) => ({
+      assignedTo: lead.assignedTo,
+      leadStatus: lead.leadStatus,
+      paymentStatus: lead.paymentStatus,
+      leadCount: lead.legacyCount || 1,
+    })),
     createdAt: update.createdAt,
     updatedAt: update.updatedAt,
   };
@@ -43,7 +55,12 @@ r.post('/', requireRole('employee'), wrap(async (req, res) => {
   const input = leadInput.parse(req.body);
   const settings = await getSettings();
   const dateKey = businessDateKey(new Date(), settings);
-  const update = await EmployeeLeadUpdate.create({ ...input, employee: req.user._id, dateKey });
+  const update = await EmployeeLeadUpdate.create({
+    employee: req.user._id,
+    dateKey,
+    leadCount: input.leads.length,
+    leads: input.leads,
+  });
   audit(req, 'employee_lead_update_create', String(update._id), { dateKey, leadCount: update.leadCount });
   res.status(201).json({ ok: true, item: safeUpdate(update, req.user) });
 }));
@@ -71,7 +88,10 @@ r.get('/admin', requireRole('admin'), wrap(async (req, res) => {
 r.put('/admin/:id', requireRole('admin'), wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');
   const input = leadInput.parse(req.body);
-  const update = await EmployeeLeadUpdate.findByIdAndUpdate(req.params.id, input, { new: true, runValidators: true });
+  const update = await EmployeeLeadUpdate.findByIdAndUpdate(req.params.id, {
+    $set: { leadCount: input.leads.length, leads: input.leads },
+    $unset: { assignedTo: 1, leadStatus: 1, paymentStatus: 1 },
+  }, { new: true, runValidators: true });
   if (!update) throw new HttpError(404, 'Lead update not found');
   const employee = await User.findById(update.employee).select('_id name employeeId').lean();
   if (!employee) throw new HttpError(404, 'Employee not found');

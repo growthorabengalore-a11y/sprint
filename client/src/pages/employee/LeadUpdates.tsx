@@ -14,32 +14,45 @@ type LeadUpdate = {
   employeeCode: string;
   dateKey: string;
   leadCount: number;
-  assignedTo: string;
-  leadStatus: 'Cold' | 'Warm' | 'Hot';
-  paymentStatus: string;
+  leads: LeadDetail[];
   createdAt: string;
 };
+type LeadDetail = { assignedTo: string; leadStatus: 'Cold' | 'Warm' | 'Hot'; paymentStatus: string; leadCount?: number };
+const emptyLead = (): LeadDetail => ({ assignedTo: '', leadStatus: 'Warm', paymentStatus: '' });
 
 function submittedAt(value: string) {
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: string; busy: boolean; onClose: () => void; onSubmit: (data: Omit<LeadUpdate, 'id' | 'employeeName' | 'employeeCode' | 'dateKey' | 'createdAt'>) => Promise<void> }) {
+function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: string; busy: boolean; onClose: () => void; onSubmit: (data: { leads: LeadDetail[] }) => Promise<void> }) {
   const [leadCount, setLeadCount] = useState('1');
-  const [assignedTo, setAssignedTo] = useState('');
-  const [leadStatus, setLeadStatus] = useState<LeadUpdate['leadStatus']>('Warm');
-  const [paymentStatus, setPaymentStatus] = useState('');
+  const [leads, setLeads] = useState<LeadDetail[]>([emptyLead()]);
+  const resizeLeads = (value: string) => {
+    setLeadCount(value);
+    const count = Number(value);
+    if (Number.isInteger(count) && count >= 1 && count <= 100) {
+      setLeads((current) => Array.from({ length: count }, (_, index) => current[index] || emptyLead()));
+    }
+  };
+  const changeLead = (index: number, patch: Partial<LeadDetail>) => {
+    setLeads((current) => current.map((lead, itemIndex) => itemIndex === index ? { ...lead, ...patch } : lead));
+  };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void onSubmit({ leadCount: Number(leadCount), assignedTo: assignedTo.trim(), leadStatus, paymentStatus: paymentStatus.trim() });
+    void onSubmit({ leads: leads.map((lead) => ({ ...lead, assignedTo: lead.assignedTo.trim(), paymentStatus: lead.paymentStatus.trim() })) });
   };
   return (
     <form className="space-y-3" onSubmit={submit}>
       <div><label className="label" htmlFor="lead-owner">Employee</label><input id="lead-owner" className="input bg-slate-50" value={employeeName} readOnly /></div>
-      <div><label className="label" htmlFor="lead-count">Lead count</label><input id="lead-count" className="input" type="number" min={1} max={100000} required value={leadCount} onChange={(event) => setLeadCount(event.target.value)} /></div>
-      <div><label className="label" htmlFor="lead-assigned-to">Whom did you assign this to?</label><input id="lead-assigned-to" className="input" maxLength={100} required value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)} placeholder="Person or team name" /></div>
-      <div><label className="label" htmlFor="lead-status">Lead status</label><select id="lead-status" className="input" value={leadStatus} onChange={(event) => setLeadStatus(event.target.value as LeadUpdate['leadStatus'])}><option>Cold</option><option>Warm</option><option>Hot</option></select></div>
-      <div><label className="label" htmlFor="lead-payment-status">Payment status / next step</label><textarea id="lead-payment-status" className="input resize-y" rows={3} maxLength={500} required value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)} placeholder="e.g. Will pay tomorrow, quote sent" /></div>
+      <div><label className="label" htmlFor="lead-count">Lead count</label><input id="lead-count" className="input" type="number" min={1} max={100} required value={leadCount} onChange={(event) => resizeLeads(event.target.value)} /></div>
+      <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+        {leads.map((lead, index) => <fieldset key={index} className="space-y-3 rounded-xl border border-slate-200 p-3">
+          <legend className="px-1 text-sm font-bold text-crimson-700">Lead {index + 1}</legend>
+          <div><label className="label" htmlFor={`lead-assigned-${index}`}>Whom did you assign this to?</label><input id={`lead-assigned-${index}`} className="input" maxLength={100} required value={lead.assignedTo} onChange={(event) => changeLead(index, { assignedTo: event.target.value })} placeholder="Person or team name" /></div>
+          <div><label className="label" htmlFor={`lead-status-${index}`}>Lead status</label><select id={`lead-status-${index}`} className="input" value={lead.leadStatus} onChange={(event) => changeLead(index, { leadStatus: event.target.value as LeadDetail['leadStatus'] })}><option>Cold</option><option>Warm</option><option>Hot</option></select></div>
+          <div><label className="label" htmlFor={`lead-payment-${index}`}>Payment status / next step</label><textarea id={`lead-payment-${index}`} className="input resize-y" rows={2} maxLength={500} required value={lead.paymentStatus} onChange={(event) => changeLead(index, { paymentStatus: event.target.value })} placeholder="e.g. Will pay tomorrow, quote sent" /></div>
+        </fieldset>)}
+      </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit lead update'}</button></div>
     </form>
   );
@@ -55,7 +68,7 @@ export default function LeadUpdates() {
   const items = data?.items || [];
   const sortedItems = useMemo(() => [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [items]);
 
-  const save = async (input: Pick<LeadUpdate, 'leadCount' | 'assignedTo' | 'leadStatus' | 'paymentStatus'>) => {
+  const save = async (input: { leads: LeadDetail[] }) => {
     setBusy(true);
     try {
       await api.post('/lead-updates', input);
@@ -98,10 +111,10 @@ export default function LeadUpdates() {
           <button type="button" className="btn btn-ghost !min-h-[36px] !px-3 text-xs" disabled={!sortedItems.length || exporting} onClick={() => void exportPng()}><FiDownload />{exporting ? 'Preparing…' : 'Download PNG report'}</button>
         </div>
         {!sortedItems.length ? <Empty text="No lead updates submitted yet." /> : <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]"><thead><tr>{['Date', 'Submitted at', 'Lead count', 'Assigned to', 'Lead status', 'Payment status / next step'].map((heading) => <th key={heading} className="th">{heading}</th>)}</tr></thead>
+          <table className="w-full min-w-[780px]"><thead><tr>{['Date', 'Submitted at', 'Lead count', 'Individual lead details'].map((heading) => <th key={heading} className="th">{heading}</th>)}</tr></thead>
             <tbody>{sortedItems.map((item) => <tr key={item.id}>
               <td className="td">{fmtDate(item.dateKey)}</td><td className="td">{submittedAt(item.createdAt)}</td><td className="td font-semibold">{item.leadCount}</td>
-              <td className="td">{item.assignedTo}</td><td className="td">{item.leadStatus}</td><td className="td whitespace-normal">{item.paymentStatus}</td>
+              <td className="td whitespace-normal">{item.leads.map((lead, index) => <div key={index} className="mb-2 last:mb-0"><span className="font-semibold">Lead {index + 1}:</span> assigned to {lead.assignedTo} · {lead.leadStatus} · {lead.paymentStatus}</div>)}</td>
             </tr>)}</tbody>
           </table>
         </div>}

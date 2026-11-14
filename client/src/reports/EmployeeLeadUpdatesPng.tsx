@@ -2,13 +2,12 @@ import { forwardRef } from 'react';
 import { fmtDate, nowStamp } from '../utils/format';
 
 export type EmployeeLeadUpdateReportRow = {
+  id: string;
   employeeName: string;
   employeeCode: string;
   dateKey: string;
   leadCount: number;
-  assignedTo: string;
-  leadStatus: string;
-  paymentStatus: string;
+  leads: { assignedTo: string; leadStatus: 'Cold' | 'Warm' | 'Hot'; paymentStatus: string; leadCount?: number }[];
   createdAt: string;
 };
 
@@ -16,10 +15,16 @@ const cell: React.CSSProperties = { border: '1px solid #cfd6e4', padding: '8px 1
 const statusScore = { Cold: 33, Warm: 67, Hot: 100 } as const;
 
 const EmployeeLeadUpdatesPng = forwardRef<HTMLDivElement, { from: string; to: string; items: EmployeeLeadUpdateReportRow[]; name?: string }>(({ from, to, items, name }, ref) => {
-  const totals = items.reduce((result, item) => {
-    result.total += item.leadCount;
-    result[item.leadStatus] += item.leadCount;
-    result.performancePoints += statusScore[item.leadStatus] * item.leadCount;
+  const rows = items.flatMap((item) => item.leads.map((lead, index) => ({
+    ...lead,
+    item,
+    label: lead.leadCount && lead.leadCount > 1 ? `Lead ${index + 1} × ${lead.leadCount}` : `Lead ${index + 1}`,
+  })));
+  const totals = rows.reduce((result, row) => {
+    const count = row.leadCount || 1;
+    result.total += count;
+    result[row.leadStatus] += count;
+    result.performancePoints += statusScore[row.leadStatus] * count;
     return result;
   }, { total: 0, Cold: 0, Warm: 0, Hot: 0, performancePoints: 0 });
   const performance = totals.total ? `${(totals.performancePoints / totals.total).toFixed(2)}%` : '0.00%';
@@ -45,15 +50,15 @@ const EmployeeLeadUpdatesPng = forwardRef<HTMLDivElement, { from: string; to: st
       ))}
     </div>
     <table style={{ width: '100%', marginTop: 14, borderCollapse: 'collapse' }}>
-      <thead><tr style={{ background: '#f1f5f9' }}>{['Employee', 'Date', 'Submitted at', 'Lead count', 'Assigned to', 'Client status', 'Remark / payment status'].map((heading) => <th key={heading} style={cell}>{heading}</th>)}</tr></thead>
-      <tbody>{items.map((item) => <tr key={`${item.dateKey}-${item.createdAt}`}>
-        <td style={cell}>{item.employeeName}<div style={{ color: '#64748b', fontSize: 11 }}>{item.employeeCode}</div></td>
-        <td style={cell}>{fmtDate(item.dateKey)}</td>
-        <td style={cell}>{new Date(item.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</td>
-        <td style={cell}>{item.leadCount}</td>
-        <td style={cell}>{item.assignedTo}</td>
-        <td style={cell}>{item.leadStatus}</td>
-        <td style={cell}>{item.paymentStatus}</td>
+      <thead><tr style={{ background: '#f1f5f9' }}>{['Employee', 'Date', 'Submitted at', 'Lead # / count', 'Assigned to', 'Client status', 'Remark / payment status'].map((heading) => <th key={heading} style={cell}>{heading}</th>)}</tr></thead>
+      <tbody>{rows.map((row, index) => <tr key={`${row.item.id}-${index}`}>
+        <td style={cell}>{row.item.employeeName}<div style={{ color: '#64748b', fontSize: 11 }}>{row.item.employeeCode}</div></td>
+        <td style={cell}>{fmtDate(row.item.dateKey)}</td>
+        <td style={cell}>{new Date(row.item.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</td>
+        <td style={cell}>{row.label}</td>
+        <td style={cell}>{row.assignedTo}</td>
+        <td style={cell}>{row.leadStatus}</td>
+        <td style={cell}>{row.paymentStatus}</td>
       </tr>)}</tbody>
     </table>
     {!items.length && <div style={{ padding: 20, textAlign: 'center', color: '#64748b' }}>No employee lead updates for this period.</div>}
