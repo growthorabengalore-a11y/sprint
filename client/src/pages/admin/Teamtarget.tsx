@@ -4,6 +4,7 @@ import { api, errMsg } from '../../api';
 import { Confirm, Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
 import { addDays, fmtDate, fmtTime, inr, pct } from '../../utils/format';
 import { downloadPng } from '../../utils/exportPng';
+import TeamLeaderMonthlyPng from '../../reports/TeamLeaderMonthlyPng';
 
 type Payment = { id: string; amount: number; countedAmount: number; recordedAt: string };
 type DailyEntry = { date: string; enteredAmount?: number; achieved: number; recordedAt: string; payments: Payment[] };
@@ -185,10 +186,11 @@ export default function Teamtarget() {
   const [entryValue, setEntryValue] = useState('');
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [reportRange, setReportRange] = useState<DateRange>({ from: today, to: today });
-  const [exporting, setExporting] = useState<'team' | 'all' | null>(null);
+  const [exporting, setExporting] = useState<'team' | 'all' | 'monthly' | null>(null);
   const [deletePayment, setDeletePayment] = useState<{ payment: Payment; date: string } | null>(null);
   const teamPng = useRef<HTMLDivElement>(null);
   const allPng = useRef<HTMLDivElement>(null);
+  const monthlyPng = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async () => {
     setError('');
@@ -336,6 +338,22 @@ export default function Teamtarget() {
   };
 
   const reportTeams = useMemo(() => teams, [teams]);
+  const monthlyRange = { from: firstOfMonth(today), to: today };
+  const monthlyRows = activeTeams.map((team) => {
+    const totals = teamTotals(team, monthlyRange, today);
+    return { name: team.leaderName, target: totals.target, archived: totals.achieved, remaining: totals.remaining, percent: totals.percent };
+  });
+  const exportMonthlyPng = async () => {
+    if (!monthlyPng.current || !activeTeams.length) return;
+    setExporting('monthly');
+    try {
+      await downloadPng(monthlyPng.current, `Team-Leader-Monthly-Report-${monthlyRange.from}_${monthlyRange.to}.png`);
+    } catch (e) {
+      toast(errMsg(e), 'err');
+    } finally {
+      setExporting(null);
+    }
+  };
   const statCards = [
     { label: "Today's total payments", value: inr(todayArchived), icon: FiDollarSign, detail: 'Payments recorded today' },
     { label: 'Teams total', value: teams.length, icon: FiUsers, detail: `${activeTeams.length} active · ${teams.length - activeTeams.length} draft` },
@@ -349,7 +367,7 @@ export default function Teamtarget() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div><h1 className="text-2xl font-extrabold">Team Leader Target</h1><p className="mt-1 text-sm text-slate-500">Set team goals, record daily payments, and track progress in real time.</p></div>
-        <div className="flex flex-wrap gap-2"><button className="btn btn-ghost" onClick={() => void exportPng('all', todayRange)} disabled={!teams.length || !!exporting}><FiDownload /> {exporting === 'all' ? 'Preparing…' : "Today's report"}</button><button className="btn btn-primary" onClick={() => setFormMode('create')}><FiPlus /> Create Team Leader</button></div>
+        <div className="flex flex-wrap gap-2"><button className="btn btn-ghost" onClick={() => void exportPng('all', todayRange)} disabled={!teams.length || !!exporting}><FiDownload /> {exporting === 'all' ? 'Preparing…' : "Today's report"}</button><button className="btn btn-ghost" onClick={() => void exportMonthlyPng()} disabled={!activeTeams.length || !!exporting}><FiDownload /> {exporting === 'monthly' ? 'Preparing…' : 'Monthly report PNG'}</button><button className="btn btn-primary" onClick={() => setFormMode('create')}><FiPlus /> Create Team Leader</button></div>
       </div>
 
       {error && <ErrorBox text={error} onRetry={() => void reload()} />}
@@ -453,6 +471,9 @@ export default function Teamtarget() {
       <div aria-hidden className="pointer-events-none fixed left-[-12000px] top-0">
         {selected && <div ref={teamPng}><ReportTable teams={[selected]} range={selectedRange} title={`${selected.leaderName} · Team Report`} /></div>}
         <div ref={allPng}><ReportTable teams={reportTeams} range={reportRange} title="All Team Leaders · Target Report" /></div>
+        <div className="pointer-events-none fixed -left-[12000px] top-0" aria-hidden="true">
+          <TeamLeaderMonthlyPng ref={monthlyPng} from={monthlyRange.from} to={monthlyRange.to} rows={monthlyRows} />
+        </div>
       </div>
     </div>
   );
