@@ -13,18 +13,31 @@ export type EmployeeLeadUpdateReportRow = {
 
 const cell: React.CSSProperties = { border: '1px solid #cfd6e4', padding: '8px 10px', fontSize: 13, textAlign: 'left', verticalAlign: 'top', overflowWrap: 'anywhere' };
 const statusScore = { Cold: 33, Warm: 67, Hot: 100 } as const;
+const submittedAt = (value: string) => new Date(value).toLocaleString('en-IN', {
+  timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short',
+});
 
 const EmployeeLeadUpdatesPng = forwardRef<HTMLDivElement, { from: string; to: string; items: EmployeeLeadUpdateReportRow[]; name?: string }>(({ from, to, items, name }, ref) => {
-  const rows = items.flatMap((item) => item.leads.map((lead, index) => ({
-    ...lead,
-    item,
-    label: lead.leadCount && lead.leadCount > 1 ? `Lead ${index + 1} × ${lead.leadCount}` : `Lead ${index + 1}`,
-  })));
-  const totals = rows.reduce((result, row) => {
-    const count = row.leadCount || 1;
+  const employees = items.reduce((groups, item) => {
+    const key = item.employeeCode;
+    const group = groups.get(key) || { employeeName: item.employeeName, employeeCode: item.employeeCode, leads: [] };
+    group.leads.push(...item.leads.map((lead, index) => ({ ...lead, item, label: `Lead ${index + 1}` })));
+    groups.set(key, group);
+    return groups;
+  }, new Map<string, {
+    employeeName: string;
+    employeeCode: string;
+    leads: (EmployeeLeadUpdateReportRow['leads'][number] & {
+      item: EmployeeLeadUpdateReportRow;
+      label: string;
+    })[];
+  }>());
+  const employeeGroups = [...employees.values()];
+  const totals = employeeGroups.flatMap((employee) => employee.leads).reduce((result, lead) => {
+    const count = lead.leadCount || 1;
     result.total += count;
-    result[row.leadStatus] += count;
-    result.performancePoints += statusScore[row.leadStatus] * count;
+    result[lead.leadStatus] += count;
+    result.performancePoints += statusScore[lead.leadStatus] * count;
     return result;
   }, { total: 0, Cold: 0, Warm: 0, Hot: 0, performancePoints: 0 });
   const performance = totals.total ? `${(totals.performancePoints / totals.total).toFixed(2)}%` : '0.00%';
@@ -50,15 +63,21 @@ const EmployeeLeadUpdatesPng = forwardRef<HTMLDivElement, { from: string; to: st
       ))}
     </div>
     <table style={{ width: '100%', marginTop: 14, borderCollapse: 'collapse' }}>
-      <thead><tr style={{ background: '#f1f5f9' }}>{['Employee', 'Date', 'Submitted at', 'Lead # / count', 'Assigned to', 'Client status', 'Remark / payment status'].map((heading) => <th key={heading} style={cell}>{heading}</th>)}</tr></thead>
-      <tbody>{rows.map((row, index) => <tr key={`${row.item.id}-${index}`}>
-        <td style={cell}>{row.item.employeeName}<div style={{ color: '#64748b', fontSize: 11 }}>{row.item.employeeCode}</div></td>
-        <td style={cell}>{fmtDate(row.item.dateKey)}</td>
-        <td style={cell}>{new Date(row.item.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })}</td>
-        <td style={cell}>{row.label}</td>
-        <td style={cell}>{row.assignedTo}</td>
-        <td style={cell}>{row.leadStatus}</td>
-        <td style={cell}>{row.paymentStatus}</td>
+      <thead><tr style={{ background: '#f1f5f9' }}>{['Employee', 'Lead details'].map((heading) => <th key={heading} style={cell}>{heading}</th>)}</tr></thead>
+      <tbody>{employeeGroups.map((employee) => <tr key={employee.employeeCode}>
+        <td style={{ ...cell, width: 190, fontWeight: 700 }}>
+          {employee.employeeName}<div style={{ color: '#64748b', fontSize: 11 }}>{employee.employeeCode}</div>
+          <div style={{ marginTop: 6, color: '#475569', fontSize: 11, fontWeight: 400 }}>
+            {employee.leads.reduce((count, lead) => count + (lead.leadCount || 1), 0)} total leads
+          </div>
+        </td>
+        <td style={cell}>
+          {employee.leads.map((lead, index) => <div key={`${lead.item.id}-${index}`} style={{ padding: '5px 0', borderBottom: index < employee.leads.length - 1 ? '1px solid #e2e8f0' : undefined }}>
+            <b>{lead.label}{lead.leadCount && lead.leadCount > 1 ? ` × ${lead.leadCount}` : ''}</b>
+            <span style={{ color: '#64748b' }}> · {fmtDate(lead.item.dateKey)} · {submittedAt(lead.item.createdAt)}</span>
+            <div style={{ marginTop: 3 }}>Assigned to: {lead.assignedTo} · Status: {lead.leadStatus} · Remark: {lead.paymentStatus || '—'}</div>
+          </div>)}
+        </td>
       </tr>)}</tbody>
     </table>
     {!items.length && <div style={{ padding: 20, textAlign: 'center', color: '#64748b' }}>No employee lead updates for this period.</div>}
