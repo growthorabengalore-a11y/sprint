@@ -18,6 +18,10 @@ const amountExcludingGst = (amount: number) => Math.round(amount * 100 / 118);
 const isWorkday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay() !== 0;
 const clampToday = (date: string, today: string) => date > today ? today : date;
 const firstOfMonth = (date: string) => `${date.slice(0, 7)}-01`;
+const lastOfMonth = (date: string) => {
+  const [year, month] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+};
 const weekStart = (date: string) => {
   const day = new Date(`${date}T00:00:00Z`).getUTCDay();
   return addDays(date, day === 0 ? -6 : 1 - day);
@@ -49,6 +53,14 @@ function teamTotals(team: Team, range: DateRange, today: string) {
   return { target, achieved, remaining: Math.max(target - achieved, 0), percent };
 }
 
+function fullMonthTarget(team: Team, range: DateRange) {
+  let workdays = 0;
+  for (let date = range.from; date <= range.to; date = addDays(date, 1)) {
+    if (isWorkday(date)) workdays += 1;
+  }
+  return workdays * team.weeklyTarget / 6;
+}
+
 function TeamForm({ initial, onSave, onClose, busy }: {
   initial?: Team;
   onSave: (value: TeamFormValue, status: 'active' | 'draft') => Promise<void>;
@@ -57,7 +69,7 @@ function TeamForm({ initial, onSave, onClose, busy }: {
 }) {
   const [leaderName, setLeaderName] = useState(initial?.leaderName || '');
   const [members, setMembers] = useState(initial?.members || ['']);
-  const [weeklyTarget, setWeeklyTarget] = useState(initial?.weeklyTarget ? String(initial.weeklyTarget) : '');
+  const [weeklyTarget, setWeeklyTarget] = useState(initial?.weeklyTarget ? String(initial.weeklyTarget) : '300000');
   const save = async (event: FormEvent, status: 'active' | 'draft') => {
     event.preventDefault();
     const cleanMembers = members.map((name) => name.trim()).filter(Boolean);
@@ -338,10 +350,17 @@ export default function Teamtarget() {
   };
 
   const reportTeams = useMemo(() => teams, [teams]);
-  const monthlyRange = { from: firstOfMonth(today), to: today };
+  const monthlyRange = { from: firstOfMonth(today), to: lastOfMonth(today) };
   const monthlyRows = activeTeams.map((team) => {
-    const totals = teamTotals(team, monthlyRange, today);
-    return { name: team.leaderName, target: totals.target, archived: totals.achieved, remaining: totals.remaining, percent: totals.percent };
+    const monthToDate = teamTotals(team, monthlyRange, today);
+    const target = fullMonthTarget(team, monthlyRange);
+    return {
+      name: team.leaderName,
+      target,
+      archived: monthToDate.achieved,
+      remaining: Math.max(target - monthToDate.achieved, 0),
+      percent: target ? monthToDate.achieved / target * 100 : 0,
+    };
   });
   const exportMonthlyPng = async () => {
     if (!monthlyPng.current || !activeTeams.length) return;
@@ -472,7 +491,7 @@ export default function Teamtarget() {
         {selected && <div ref={teamPng}><ReportTable teams={[selected]} range={selectedRange} title={`${selected.leaderName} · Team Report`} /></div>}
         <div ref={allPng}><ReportTable teams={reportTeams} range={reportRange} title="All Team Leaders · Target Report" /></div>
         <div className="pointer-events-none fixed -left-[12000px] top-0" aria-hidden="true">
-          <TeamLeaderMonthlyPng ref={monthlyPng} from={monthlyRange.from} to={monthlyRange.to} rows={monthlyRows} />
+          <TeamLeaderMonthlyPng ref={monthlyPng} from={monthlyRange.from} to={monthlyRange.to} asOf={today} rows={monthlyRows} />
         </div>
       </div>
     </div>

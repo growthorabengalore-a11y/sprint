@@ -12,8 +12,9 @@ type MonthlyRow = {
 const TeamLeaderMonthlyPng = forwardRef<HTMLDivElement, {
   from: string;
   to: string;
+  asOf: string;
   rows: MonthlyRow[];
-}>(({ from, to, rows }, ref) => {
+}>(({ from, to, asOf, rows }, ref) => {
   const totals = rows.reduce((result, row) => ({
     target: result.target + row.target,
     archived: result.archived + row.archived,
@@ -75,7 +76,7 @@ const TeamLeaderMonthlyPng = forwardRef<HTMLDivElement, {
       </table>
       {!rows.length && <div style={{ padding: 20, textAlign: 'center', color: '#64748b' }}>No active team leaders for this month.</div>}
       <footer style={{ padding: '12px 2px 0', color: '#64748b', fontSize: 11 }}>
-        Generated {nowStamp()} (IST) · Monthly target is counted through the report end date; archived payments exclude GST.
+        Generated {nowStamp()} (IST) · Target is for the full month; archived payments are through {fmtDate(asOf)} and exclude GST.
       </footer>
     </div>
   );
