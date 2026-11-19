@@ -225,12 +225,14 @@ export default function Teamtarget() {
   const todayRange = { from: today, to: today };
   const activeTeams = teams.filter((team) => team.status === 'active');
   const todayArchived = activeTeams.reduce((sum, team) => sum + (team.dailyEntries.find((entry) => entry.date === today)?.achieved || 0), 0);
-  const currentWeekRange = { from: weekStart(today), to: today };
-  const weeklyTotals = activeTeams.reduce((totals, team) => {
-    const current = teamTotals(team, currentWeekRange, today);
-    return { target: totals.target + team.weeklyTarget, achieved: totals.achieved + current.achieved };
+  const monthToDateRange = { from: firstOfMonth(today), to: today };
+  const monthlyTotals = activeTeams.reduce((totals, team) => {
+    const current = teamTotals(team, monthToDateRange, today);
+    return { target: totals.target + current.target, achieved: totals.achieved + current.achieved };
   }, { target: 0, achieved: 0 });
-  const topTeam = activeTeams.map((team) => ({ team, totals: teamTotals(team, currentWeekRange, today) })).sort((a, b) => b.totals.percent - a.totals.percent)[0];
+  const topTeam = activeTeams
+    .map((team) => ({ team, totals: teamTotals(team, monthToDateRange, today) }))
+    .sort((a, b) => b.totals.achieved - a.totals.achieved)[0];
   const selectedEntry = selected?.dailyEntries.find((entry) => entry.date === entryDate);
 
   useEffect(() => {
@@ -376,10 +378,10 @@ export default function Teamtarget() {
   const statCards = [
     { label: "Today's total payments", value: inr(todayArchived), icon: FiDollarSign, detail: 'Payments recorded today' },
     { label: 'Teams total', value: teams.length, icon: FiUsers, detail: `${activeTeams.length} active · ${teams.length - activeTeams.length} draft` },
-    { label: 'Target total', value: inr(weeklyTotals.target), icon: FiTarget, detail: 'This week · active teams' },
-    { label: 'Archived total', value: inr(weeklyTotals.achieved), icon: FiCheckCircle, detail: 'This week · active teams' },
-    { label: 'Remaining payment', value: inr(Math.max(weeklyTotals.target - weeklyTotals.achieved, 0)), icon: FiTrendingUp, detail: 'This week · active teams' },
-    { label: 'Top team this week', value: topTeam ? topTeam.team.leaderName : '—', icon: FiAward, detail: topTeam ? `${pct(topTeam.totals.percent)} achieved` : 'No active teams' },
+    { label: 'Target total', value: inr(monthlyTotals.target), icon: FiTarget, detail: 'This month · active teams' },
+    { label: 'Archived total', value: inr(monthlyTotals.achieved), icon: FiCheckCircle, detail: 'This month · active teams' },
+    { label: 'Remaining payment', value: inr(Math.max(monthlyTotals.target - monthlyTotals.achieved, 0)), icon: FiTrendingUp, detail: 'This month · active teams' },
+    { label: 'Top performer this month', value: topTeam ? topTeam.team.leaderName : '—', icon: FiAward, detail: topTeam ? `${inr(topTeam.totals.achieved)} payment this month` : 'No active teams' },
   ];
 
   return (

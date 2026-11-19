@@ -12,7 +12,7 @@ import { ClientRecord, clientFile } from '../../components/admin/clientTypes';
 const LIMIT = 10;
 const columnOptions = [
   ['name', 'Client name'], ['companyName', 'Company'], ['phone', 'Phone'], ['email', 'Email'],
-  ['submittedAt', 'Submitted at'], ['status', 'Status'],
+  ['filedDate', 'Filed date'], ['status', 'Status'],
 ] as const;
 
 export default function ClientsForm() {
@@ -101,11 +101,7 @@ export default function ClientsForm() {
     if (key === 'companyName') return client.companyName;
     if (key === 'phone') return client.phone;
     if (key === 'email') return client.email;
-    if (key === 'submittedAt') return new Date(client.createdAt).toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
+    if (key === 'filedDate') return clientFile(client.filedDate);
     return client.status;
   };
 
