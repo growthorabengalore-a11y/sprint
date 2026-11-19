@@ -9,12 +9,13 @@ import { User } from '../models/User.js';
 import { Attendance } from '../models/Attendance.js';
 import { FaceRegistration } from '../models/FaceRegistration.js';
 import { audit } from '../models/AuditLog.js';
-import { wrap, HttpError, requireAuth, requireRole, blockIfMustChange } from '../middleware/auth.js';
+import { wrap, HttpError, requireAuth, requireAdminPage, requireRole, blockIfMustChange, employeeScope } from '../middleware/auth.js';
 import { getSettings } from '../services/settings.js';
 import { computeRecord, lateInfo } from '../services/attendanceStatus.js';
 import { isWorkingDay } from '../services/performance.js';
-import { businessDateKey, isValidDateKey, rangeKeys } from '../utils/time.js';
-import { ATTENDANCE_NETWORK_MESSAGE, attendanceClientIp, isOfficeAttendanceNetwork } from '../utils/attendanceNetwork.js';
+import { addDays, businessDateKey, isValidDateKey, rangeKeys } from '../utils/time.js';
+import { ATTENDANCE_NETWORK_MESSAGE, attendanceClientIp, isAttendanceNetworkAllowed } from '../utils/attendanceNetwork.js';
+import { monthlyLatePenaltyFlags } from '../services/attendanceLatePenalty.js';
 import { AttendanceFallbackError, createAttendanceFallbackToken, verifyAttendanceFallbackToken } from '../services/attendanceFallback.js';
 import { env } from '../config/env.js';
 import { uploadRoot } from '../services/faceFiles.js';
@@ -43,7 +44,7 @@ const emp = [requireAuth, blockIfMustChange, requireRole('employee')];
 r.get('/eligibility', ...emp, wrap(async (req, res) => {
   const { s, dateKey, att } = await today(req.user._id);
   const attendanceNetworkIp = attendanceClientIp(req.ip, req.get('cf-connecting-ip'));
-  const attendanceNetworkAllowed = isOfficeAttendanceNetwork(attendanceNetworkIp);
+  const attendanceNetworkAllowed = isAttendanceNetworkAllowed(req.user, attendanceNetworkIp);
   res.json({ ok: true, dateKey, faceRegistered: req.user.faceRegistered, attendanceNetworkAllowed,
     attendanceNetworkIp,
     canCheckIn: attendanceNetworkAllowed && !att && req.user.faceRegistered,
@@ -53,7 +54,7 @@ r.get('/eligibility', ...emp, wrap(async (req, res) => {
 
 r.post('/fallback-session', ...emp, faceLimiter, wrap(async (req, res) => {
   const { mode } = z.object({ mode: z.enum(['check-in', 'check-out']) }).parse(req.body);
-  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!isAttendanceNetworkAllowed(req.user, attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
   if (!req.user.faceRegistered) throw new HttpError(400, 'Register your face before taking attendance');
   const { att } = await today(req.user._id);
   if (mode === 'check-in' && att) throw new HttpError(409, 'Already checked in today');
@@ -95,7 +96,7 @@ async function verifyFace(req, s) {
   return { method: 'face', distance: +best.toFixed(4), liveness };
 }
 r.post('/check-in', ...emp, faceLimiter, wrap(async (req, res) => {
-  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!isAttendanceNetworkAllowed(req.user, attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
   const s = await getSettings();
   const dateKey = businessDateKey(new Date(), s);
   const v = await verifyFace(req, s);
@@ -105,7 +106,7 @@ r.post('/check-in', ...emp, faceLimiter, wrap(async (req, res) => {
   } catch (e) { if (e.code === 11000) throw new HttpError(409, 'Already checked in today'); throw e; }
 }));
 r.post('/check-out', ...emp, faceLimiter, wrap(async (req, res) => {
-  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!isAttendanceNetworkAllowed(req.user, attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
   const s = await getSettings();
   const dateKey = businessDateKey(new Date(), s);
   const v = await verifyFace(req, s);
@@ -120,7 +121,7 @@ r.post('/check-out', ...emp, faceLimiter, wrap(async (req, res) => {
 }));
 r.post('/fallback/:mode', ...emp, faceLimiter, wrap(async (req, res) => {
   const mode = z.enum(['check-in', 'check-out']).parse(req.params.mode);
-  if (!isOfficeAttendanceNetwork(attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
+  if (!isAttendanceNetworkAllowed(req.user, attendanceClientIp(req.ip, req.get('cf-connecting-ip')))) throw new HttpError(403, ATTENDANCE_NETWORK_MESSAGE);
   if (!req.user.faceRegistered) throw new HttpError(400, 'Register your face before taking attendance');
   const { fallbackToken } = z.object({ fallbackToken: z.string().min(1) }).parse(req.body);
   try {
@@ -169,18 +170,32 @@ r.get('/my', ...emp, wrap(async (req, res) => {
 }));
 
 // ---------- Admin ----------
-const adm = [requireAuth, requireRole('admin')];
+const adm = [requireAuth, requireAdminPage('attendance')];
+const reportAdm = [requireAuth, requireAdminPage('attendance-reports')];
 function range(q, s) {
   const t = businessDateKey(new Date(), s);
   const from = q.from || t, to = q.to || from;
   if (!isValidDateKey(from) || !isValidDateKey(to) || from > to || rangeKeys(from, to).length > 400) throw new HttpError(400, 'Invalid date range');
   return { from, to, today: t };
 }
-async function buildAttendance(q, employeeFilter = {}) {
+async function buildAttendance(q, employeeFilter = {}, req) {
   const s = await getSettings();
   const { from, to, today: t } = range(q, s);
-  const emps = await User.find({ role: 'employee', archived: false, ...employeeFilter }).sort({ createdAt: 1 });
+  const emps = await User.find({ ...employeeScope(req), archived: false, ...employeeFilter }).sort({ createdAt: 1 });
   const recs = await Attendance.find({ dateKey: { $gte: from, $lte: to }, employee: { $in: emps.map((e) => e._id) } });
+  const latePenaltyMonth = `${t.slice(0, 7)}-01`;
+  let latePenaltyFrom = addDays(latePenaltyMonth, -1);
+  let previousWorkingDays = 0;
+  for (let scanned = 0; scanned < 800 && previousWorkingDays < 3; scanned++) {
+    if (isWorkingDay(latePenaltyFrom, s)) previousWorkingDays++;
+    if (previousWorkingDays < 3) latePenaltyFrom = addDays(latePenaltyFrom, -1);
+  }
+  if (previousWorkingDays < 3) throw new HttpError(400, 'Could not determine the attendance workday calendar');
+  const latePenaltyRecords = await Attendance.find({
+    dateKey: { $gte: latePenaltyFrom, $lte: t },
+    employee: { $in: emps.map((e) => e._id) },
+  }).select('employee dateKey checkIn').lean();
+  const latePenaltyFlags = monthlyLatePenaltyFlags(emps, latePenaltyRecords, latePenaltyFrom, latePenaltyMonth, t, s);
   const map = new Map(recs.map((a) => [`${a.employee}|${a.dateKey}`, a]));
   const days = rangeKeys(from, to <= t ? to : t).filter((d) => isWorkingDay(d, s));
   const employees = emps.map((e) => {
@@ -194,10 +209,10 @@ async function buildAttendance(q, employeeFilter = {}) {
       // attendance % = (present + 0.5*half) / working days in range * 100  (Needs Review/In Progress not counted until resolved)
       attendancePercent: days.length ? Math.round(((present + 0.5 * half) / days.length) * 10000) / 100 : null };
   });
-  return { s, from, to, days: days.length, employees };
+  return { s, from, to, days: days.length, employees, latePenaltyMonth: latePenaltyMonth.slice(0, 7), latePenaltyFlags };
 }
 r.get('/daily', ...adm, wrap(async (req, res) => {
-  const { from, to, employees, days, s } = await buildAttendance({ from: req.query.date || req.query.from, to: req.query.date || req.query.to });
+  const { from, to, employees, days, s } = await buildAttendance({ from: req.query.date || req.query.from, to: req.query.date || req.query.to }, {}, req);
   const rows = employees.map((e) => ({ ...(e.rows[e.rows.length - 1] || { status: "Absent" }), id: e.id, employeeId: e.employeeId, name: e.name }));
   const cnt = (f) => rows.filter(f).length;
   const nonWorking = days === 0;
@@ -206,9 +221,9 @@ r.get('/daily', ...adm, wrap(async (req, res) => {
     checkedOut: cnt((x) => !!x.checkOut), lateComers: cnt((x) => x.late), needsReview: cnt((x) => x.status === 'Needs Review'),
     completionPercent: rows.length ? Math.round((cnt((x) => !!x.checkOut) / rows.length) * 10000) / 100 : 0 } });
 }));
-r.get('/report', ...adm, wrap(async (req, res) => {
+r.get('/report', ...reportAdm, wrap(async (req, res) => {
   const f = req.query.employeeId ? { _id: req.query.employeeId } : {};
-  const out = await buildAttendance(req.query, f);
+  const out = await buildAttendance(req.query, f, req);
   delete out.s;
   res.json({ ok: true, ...out });
 }));
@@ -216,7 +231,7 @@ r.get('/report', ...adm, wrap(async (req, res) => {
 r.post('/manual', ...adm, wrap(async (req, res) => {
   const d = z.object({ employeeId: z.string(), type: z.enum(['checkin', 'checkout']), reason: z.string().min(5).max(300) }).parse(req.body);
   const s = await getSettings();
-  const u = await User.findOne({ _id: d.employeeId, role: 'employee', archived: false });
+  const u = await User.findOne({ _id: d.employeeId, ...employeeScope(req), archived: false });
   if (!u) throw new HttpError(404, 'Employee not found');
   const dateKey = businessDateKey(new Date(), s);
   const v = { method: 'manual', by: req.user._id, reason: d.reason };
@@ -238,6 +253,7 @@ r.patch('/:id/correct', ...adm, wrap(async (req, res) => {
   const d = z.object({ checkIn: z.string().datetime().nullable(), checkOut: z.string().datetime().nullable(), reason: z.string().min(5).max(300) }).parse(req.body);
   const a = await Attendance.findById(req.params.id);
   if (!a) throw new HttpError(404, 'Not found');
+  if (!await User.exists({ _id: a.employee, ...employeeScope(req) })) throw new HttpError(404, 'Not found');
   const before = { checkIn: a.checkIn, checkOut: a.checkOut, status: a.status };
   a.checkIn = d.checkIn ? new Date(d.checkIn) : a.checkIn; a.checkOut = d.checkOut ? new Date(d.checkOut) : null;
   if (a.checkOut && a.checkOut <= a.checkIn) throw new HttpError(400, 'Check-out must be after check-in');
@@ -248,8 +264,13 @@ r.patch('/:id/correct', ...adm, wrap(async (req, res) => {
   res.json({ ok: true, record: view(a, s) });
 }));
 // protected face image: admin or the owner only
-r.get('/face-image/:employeeId/:index', requireAuth, wrap(async (req, res) => {
-  if (req.user.role !== 'admin' && String(req.user._id) !== req.params.employeeId) throw new HttpError(403, 'Forbidden');
+r.get('/face-image/:employeeId/:index', requireAuth, blockIfMustChange, wrap(async (req, res) => {
+  const isOwner = String(req.user._id) === req.params.employeeId;
+  const isAdmin = req.user.role === 'admin';
+  const isScopedManager = ['branchAdmin', 'hr', 'operations'].includes(req.user.role)
+    && (req.user.role === 'branchAdmin' || req.user.pagePermissions?.includes('champs'))
+    && await User.exists({ _id: req.params.employeeId, ...employeeScope(req) });
+  if (!isAdmin && !isOwner && !isScopedManager) throw new HttpError(403, 'Forbidden');
   const reg = await FaceRegistration.findOne({ employee: req.params.employeeId });
   const rel = reg?.imagePaths?.[+req.params.index];
   if (!rel) throw new HttpError(404, 'Not found');

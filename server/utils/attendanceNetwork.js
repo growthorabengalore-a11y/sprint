@@ -29,3 +29,7 @@ export function attendanceClientIp(proxyIp, cloudflareClientIp) {
 export function isOfficeAttendanceNetwork(ip) {
   return typeof ip === 'string' && ip.toLowerCase().replace(/^::ffff:/, '') === OFFICE_PUBLIC_IP;
 }
+
+export function isAttendanceNetworkAllowed(user, ip) {
+  return Boolean(user?.branchId) || isOfficeAttendanceNetwork(ip);
+}

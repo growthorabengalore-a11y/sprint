@@ -8,6 +8,7 @@ import { useState } from 'react';
 
 export default function Home() {
   const { user } = useAuth();
+  const isBde = (user?.jobRole || 'BDE').trim().toLowerCase() === 'bde';
   const [range, setRange] = useState('week'); const [custom, setCustom] = useState({ from: '', to: '' });
   const elig = useFetch('/sprints/eligibility');
   const today = elig.data?.dateKey as string | undefined;
@@ -17,11 +18,12 @@ export default function Home() {
   const rows: any[] = (hist.data?.rows || []).filter((x: any) => x.morning || x.evening).slice().reverse();
   return (
     <div className="space-y-4">
-      <div className="card p-5"><div className="text-sm text-slate-500">Welcome</div><div className="text-2xl font-extrabold">{user.name}</div><div className="text-sm text-slate-600">{user.employeeId}</div></div>
+      <div className="card p-5"><div className="text-sm text-slate-500">Welcome</div><div className="text-2xl font-extrabold">{user.name}</div><div className="text-sm text-slate-600">{user.employeeId} · {user.jobRole || 'BDE'}</div></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Link to="/app/attendance" className="card flex items-center gap-4 p-6 hover:border-crimson-500 hover:shadow-md"><FiCamera size={30} className="text-crimson-600" /><div><div className="text-lg font-bold">1. Take Attendance</div><div className="text-sm text-slate-500">Face check-in / check-out</div></div></Link>
-        <Link to="/app/sprint" className="card flex items-center gap-4 p-6 hover:border-crimson-500 hover:shadow-md"><FiEdit3 size={30} className="text-crimson-600" /><div><div className="text-lg font-bold">2. Update Sprint / Projection</div><div className="text-sm text-slate-500">Morning plan &amp; evening achieved</div></div></Link>
+        {isBde && <Link to="/app/sprint" className="card flex items-center gap-4 p-6 hover:border-crimson-500 hover:shadow-md"><FiEdit3 size={30} className="text-crimson-600" /><div><div className="text-lg font-bold">2. Update Sprint / Projection</div><div className="text-sm text-slate-500">Morning plan &amp; evening achieved</div></div></Link>}
       </div>
+      {!isBde && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Sprint updates are available only to BDE champs. Attendance and lead updates remain available for your role.</div>}
       <div className="card p-4"><div className="mb-3 flex flex-wrap items-center gap-2"><h2 className="font-bold">My sprint records</h2>
         <select className="input !w-auto" value={range} onChange={(e) => setRange(e.target.value)}><option value="today">Today</option><option value="week">Last 7 days</option><option value="month">This month</option><option value="custom">Custom</option></select>
         {range === 'custom' && <><input type="date" className="input !w-auto" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /><input type="date" className="input !w-auto" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></>}</div>

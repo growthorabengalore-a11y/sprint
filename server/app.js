@@ -14,6 +14,7 @@ import clients from './routes/clients.js';
 import teams from './routes/teams.js';
 import leads from './routes/leads.js';
 import employeeLeadUpdates from './routes/employeeLeadUpdates.js';
+import roles from './routes/roles.js';
 
 export function createApp() {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp() {
   // NOTE: uploads/ is deliberately NOT served statically. Images go through an authorized route only.
   app.get('/api/health', (_q, r) => r.json({ ok: true }));
   app.use('/api/auth', auth);
+  app.use('/api/roles', roles);
   app.use('/api/employees', employees);
   app.use('/api/sprints', sprints);
   app.use('/api/attendance', attendance);

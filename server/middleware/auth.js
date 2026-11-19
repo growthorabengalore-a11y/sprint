@@ -16,8 +16,29 @@ export const requireAuth = wrap(async (req, _res, next) => {
   req.user = user;
   next();
 });
-export const requireRole = (role) => (req, _res, next) =>
-  req.user?.role === role ? next() : next(new HttpError(403, 'Forbidden'));
+export const requireRole = (...roles) => (req, _res, next) =>
+  roles.includes(req.user?.role) ? next() : next(new HttpError(403, 'Forbidden'));
+export const requireAdminPage = (page) => (req, _res, next) => {
+  const user = req.user;
+  if (user?.mustChangePassword) return next(new HttpError(403, 'Password change required', { code: 'MUST_CHANGE_PASSWORD' }));
+  if (user?.role === 'admin' || (user?.role === 'branchAdmin' && page !== 'roles')
+    || (['hr', 'operations'].includes(user?.role) && user.pagePermissions?.includes(page))) return next();
+  return next(new HttpError(403, 'You do not have access to this page'));
+};
+export const requireAnyAdminPage = (...pages) => (req, _res, next) => {
+  const user = req.user;
+  if (user?.mustChangePassword) return next(new HttpError(403, 'Password change required', { code: 'MUST_CHANGE_PASSWORD' }));
+  if (user?.role === 'admin' || (user?.role === 'branchAdmin' && pages.every((page) => page !== 'roles'))
+    || (['hr', 'operations'].includes(user?.role) && pages.some((page) => user.pagePermissions?.includes(page)))) return next();
+  return next(new HttpError(403, 'You do not have access to this page'));
+};
+export const employeeScope = (req) => {
+  const filter = { role: 'employee' };
+  if (['branchAdmin', 'hr', 'operations'].includes(req.user?.role)) {
+    filter.branchId = req.user.branchId || { $in: [] };
+  }
+  return filter;
+};
 /** Blocks everything except change-password until the temporary password is changed. */
 export const blockIfMustChange = (req, _res, next) =>
   req.user?.mustChangePassword ? next(new HttpError(403, 'Password change required', { code: 'MUST_CHANGE_PASSWORD' })) : next();

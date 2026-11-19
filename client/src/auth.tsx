@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api, TOKEN_KEY } from './api';
-type U = { id: string; name: string; employeeId: string; email: string; phone: string; role: 'admin' | 'employee'; faceRegistered: boolean; mustChangePassword: boolean } | null;
+type U = { id: string; name: string; employeeId: string; email: string; phone: string; role: 'admin' | 'employee' | 'branchAdmin' | 'hr' | 'operations'; jobRole: string; faceRegistered: boolean; mustChangePassword: boolean; branchName: string | null; pagePermissions: string[] } | null;
 const Ctx = createContext<any>(null);
 export const useAuth = () => useContext(Ctx);
 export function AuthProvider({ children }: { children: ReactNode }) {

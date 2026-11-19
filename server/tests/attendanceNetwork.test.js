@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { attendanceClientIp, isOfficeAttendanceNetwork } from '../utils/attendanceNetwork.js';
+import { attendanceClientIp, isAttendanceNetworkAllowed, isOfficeAttendanceNetwork } from '../utils/attendanceNetwork.js';
 
 test('allows the configured office public IP', () => {
   assert.equal(isOfficeAttendanceNetwork('119.82.121.76'), true);
@@ -25,4 +25,12 @@ test('does not trust a Cloudflare client-IP header from a non-Cloudflare address
 
 test('falls back to the proxy address when Cloudflare client IP is invalid', () => {
   assert.equal(attendanceClientIp('172.68.239.189', 'not-an-ip'), '172.68.239.189');
+});
+
+test('branch employees can take attendance from any network while unassigned Bangalore employees keep the office-IP restriction', () => {
+  assert.equal(isAttendanceNetworkAllowed({ branchId: 'pune-branch' }, '192.168.1.10'), true);
+  assert.equal(isAttendanceNetworkAllowed({ branchId: 'chennai-branch' }, undefined), true);
+  assert.equal(isAttendanceNetworkAllowed({ branchId: null }, '119.82.121.76'), true);
+  assert.equal(isAttendanceNetworkAllowed({ branchId: null }, '192.168.1.10'), false);
+  assert.equal(isAttendanceNetworkAllowed({}, undefined), false);
 });

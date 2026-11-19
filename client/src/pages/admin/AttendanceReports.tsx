@@ -7,7 +7,7 @@ import { downloadPng } from '../../utils/exportPng';
 import AttendancePng from '../../reports/AttendancePng';
 
 export default function AttendanceReports() {
-  const today = useFetch('/dashboard/stats').data?.today as string | undefined;
+  const today = useFetch('/dashboard/business-date').data?.today as string | undefined;
   const [preset, setPreset] = useState('week'); const [custom, setCustom] = useState({ from: '', to: '' }); const [emp, setEmp] = useState(''); const [busy, setBusy] = useState(false);
   const emps = useFetch('/employees', { limit: 200 });
   const t = today || '';

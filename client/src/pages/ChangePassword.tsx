@@ -12,7 +12,7 @@ export default function ChangePassword() {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({ resolver: zodResolver(schema) });
   if (!user) { nav('/login'); return null; }
   const on = async (v: any) => {
-    try { const { data } = await api.post('/auth/change-password', { currentPassword: v.currentPassword, newPassword: v.newPassword }); setSession(data.token, data.user); toast('Password updated'); nav(data.user.role === 'admin' ? '/admin' : '/app'); }
+    try { const { data } = await api.post('/auth/change-password', { currentPassword: v.currentPassword, newPassword: v.newPassword }); setSession(data.token, data.user); toast('Password updated'); nav(['admin', 'branchAdmin', 'hr', 'operations'].includes(data.user.role) ? '/admin' : '/app'); }
     catch (e) { toast(errMsg(e), 'err'); }
   };
   return (

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { wrap, requireAuth, requireRole } from '../middleware/auth.js';
+import { wrap, requireAuth, requireAdminPage } from '../middleware/auth.js';
 import { getSettings, saveSettings } from '../services/settings.js';
 import { AuditLog, audit } from '../models/AuditLog.js';
 
@@ -28,14 +28,14 @@ r.get('/public', requireAuth, wrap(async (_req, res) => {
   res.json({ ok: true, settings: { timezone: s.timezone, weekStartDay: s.weekStartDay, workStartMinutes: s.workStartMinutes, lateThresholdMinutes: s.lateThresholdMinutes,
     faceMatchThreshold: s.faceMatchThreshold, requireLiveness: s.requireLiveness } });
 }));
-r.get('/', requireAuth, requireRole('admin'), wrap(async (_req, res) => res.json({ ok: true, settings: await getSettings(true) })));
-r.put('/', requireAuth, requireRole('admin'), wrap(async (req, res) => {
+r.get('/', requireAuth, requireAdminPage('settings'), wrap(async (_req, res) => res.json({ ok: true, settings: await getSettings(true) })));
+r.put('/', requireAuth, requireAdminPage('settings'), wrap(async (req, res) => {
   const patch = schema.parse(req.body);
   const settings = await saveSettings(patch);
   audit(req, 'settings_update', 'settings', patch);
   res.json({ ok: true, settings });
 }));
-r.get('/audit', requireAuth, requireRole('admin'), wrap(async (req, res) => {
+r.get('/audit', requireAuth, requireAdminPage('settings'), wrap(async (req, res) => {
   const page = Math.max(1, +req.query.page || 1);
   const items = await AuditLog.find().sort({ createdAt: -1 }).skip((page - 1) * 50).limit(50).lean();
   res.json({ ok: true, items });

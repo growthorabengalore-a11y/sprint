@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { TeamTarget } from '../models/TeamTarget.js';
 import { audit } from '../models/AuditLog.js';
-import { HttpError, wrap, requireAuth, requireRole } from '../middleware/auth.js';
+import { HttpError, wrap, requireAuth, requireAdminPage } from '../middleware/auth.js';
 import { isValidDateKey } from '../utils/time.js';
 import { amountForTarget, sumCountedPayments } from '../services/teamTargetPayments.js';
 
@@ -63,7 +63,7 @@ const teamSchema = z.object({
   path: ['members'], message: 'Team member names must be unique',
 });
 
-r.use(requireAuth, requireRole('admin'));
+r.use(requireAuth, requireAdminPage('team-target'));
 
 r.get('/', wrap(async (_req, res) => {
   const items = await TeamTarget.find().sort({ createdAt: -1 }).lean();

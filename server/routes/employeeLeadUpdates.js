@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { EmployeeLeadUpdate } from '../models/EmployeeLeadUpdate.js';
 import { User } from '../models/User.js';
 import { audit } from '../models/AuditLog.js';
-import { blockIfMustChange, HttpError, requireAuth, requireRole, wrap } from '../middleware/auth.js';
+import { blockIfMustChange, HttpError, requireAuth, requireRole, requireAdminPage, employeeScope, wrap } from '../middleware/auth.js';
 import { getSettings } from '../services/settings.js';
 import { businessDateKey, isValidDateKey } from '../utils/time.js';
 
@@ -65,15 +65,16 @@ r.post('/', requireRole('employee'), wrap(async (req, res) => {
   res.status(201).json({ ok: true, item: safeUpdate(update, req.user) });
 }));
 
-r.get('/admin', requireRole('admin'), wrap(async (req, res) => {
-  const query = {};
+r.get('/admin', requireAdminPage('leads'), wrap(async (req, res) => {
+  const scopedEmployees = await User.find(employeeScope(req)).distinct('_id');
+  const query = { employee: { $in: scopedEmployees } };
   const from = req.query.from ? z.string().refine(isValidDateKey, 'Enter a valid start date').parse(req.query.from) : null;
   const to = req.query.to ? z.string().refine(isValidDateKey, 'Enter a valid end date').parse(req.query.to) : null;
   if (from && to && from > to) throw new HttpError(400, 'Start date must be on or before end date');
   if (from || to) query.dateKey = { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) };
   if (req.query.employeeId) {
     if (!mongoose.isValidObjectId(req.query.employeeId)) throw new HttpError(400, 'Invalid employee');
-    query.employee = req.query.employeeId;
+    query.employee = scopedEmployees.some((id) => String(id) === String(req.query.employeeId)) ? req.query.employeeId : { $in: [] };
   }
   const updates = await EmployeeLeadUpdate.find(query).sort({ createdAt: -1 }).limit(2000).lean();
   const employeeIds = [...new Set(updates.map((update) => String(update.employee)))];
@@ -85,10 +86,11 @@ r.get('/admin', requireRole('admin'), wrap(async (req, res) => {
   }) });
 }));
 
-r.put('/admin/:id', requireRole('admin'), wrap(async (req, res) => {
+r.put('/admin/:id', requireAdminPage('leads'), wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');
   const input = leadInput.parse(req.body);
-  const update = await EmployeeLeadUpdate.findByIdAndUpdate(req.params.id, {
+  const scopedEmployees = await User.find(employeeScope(req)).distinct('_id');
+  const update = await EmployeeLeadUpdate.findOneAndUpdate({ _id: req.params.id, employee: { $in: scopedEmployees } }, {
     $set: { leadCount: input.leads.length, leads: input.leads },
     $unset: { assignedTo: 1, leadStatus: 1, paymentStatus: 1 },
   }, { new: true, runValidators: true });

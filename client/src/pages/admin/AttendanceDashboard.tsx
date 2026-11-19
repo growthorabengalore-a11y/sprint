@@ -14,7 +14,7 @@ export default function AttendanceDashboard() {
   const png = useRef<HTMLDivElement>(null); const [busy, setBusy] = useState(false);
   const rows: any[] = data?.rows || []; const c = data?.cards;
   const list = (k: string) => k === 'late' ? rows.filter((r) => r.late) : k === 'present' ? rows.filter((r) => r.status === 'Present') : k === 'half' ? rows.filter((r) => r.status === 'Half Day') : rows.filter((r) => r.status === 'Absent');
-  const cards: any[] = c ? [['Total Employees', c.totalEmployees, FiUsers], ['Present Today', c.present, FiCheckCircle, 'present'], ['Half Day', c.halfDay, FiCoffee, 'half'], ['Absent', c.absent, FiUserX, 'absent'], ['Checked In', c.checkedIn, FiLogIn], ['Checked Out', c.checkedOut, FiLogOut], ['Late Comers', c.lateComers, FiAlertTriangle, 'late'], ['Attendance Completion', `${c.completionPercent}%`, FiPercent]] : [];
+  const cards: any[] = c ? [['Total Employees', c.totalEmployees, FiUsers], ['Present Today', c.present, FiCheckCircle, 'present'], ['Half Day', c.halfDay, FiCoffee, 'half'], ['Absent', c.absent, FiUserX, 'absent'], ['Checked In', c.checkedIn, FiLogIn], ['Checked Out', c.checkedOut, FiLogOut], ['Late Comers', c.lateComers, FiAlertTriangle, 'late'], ['Attendance Completion', `${c.completionPercent}%`, FiPercent], ['Half-Day Cuts This Month', data?.latePenaltyFlags?.length || 0, FiAlertTriangle]] : [];
   const exp = async () => { if (!png.current) return; setBusy(true); try { await downloadPng(png.current, `Attendance-${data.date}.png`); } catch { toast('PNG export failed', 'err'); } finally { setBusy(false); } };
   return (
     <div className="space-y-4">
@@ -30,6 +30,16 @@ export default function AttendanceDashboard() {
         {loading && !data ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="card p-4"><Skeleton className="h-12 w-full" /></div>) : cards.map(([k, v, Icon, m]) => (
           <button key={k} disabled={!m} onClick={() => m && setModal(m)} className={`card p-4 text-left ${m ? 'hover:border-crimson-500 hover:shadow-md' : 'cursor-default'}`}><div className="flex justify-between text-slate-500"><span className="text-xs font-semibold">{k}</span><Icon className="text-crimson-600" /></div><div className="mt-1 text-2xl font-extrabold">{v}</div></button>))}
       </div>
+      {!!data?.latePenaltyFlags?.length && <section className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900">
+        <h2 className="flex items-center gap-2 font-bold"><FiAlertTriangle className="text-red-700" /> Late Attendance — {data.latePenaltyMonth}</h2>
+        <p className="mt-1 text-sm">Each flagged champ receives one half-day cut for the month.</p>
+        <ul className="mt-3 space-y-2">
+          {data.latePenaltyFlags.map((person: any) => <li key={person.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-white px-3 py-2">
+            <span className="font-semibold">{person.name} <span className="font-normal text-red-800">({person.employeeId})</span></span>
+            <span className="text-sm">{person.hasThreeConsecutiveLateDays ? '3 consecutive working days late' : `${person.lateDaysThisMonth} late days this month`} — 1 half-day cut</span>
+          </li>)}
+        </ul>
+      </section>}
       <div className="card hidden overflow-x-auto md:block"><table className="w-full"><thead><tr>{['ID', 'Name', 'Check-in', 'Check-out', 'Hours', 'Status', 'Verification', 'Actions'].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
         <tbody>{rows.map((r) => <tr key={r.id}><td className="td">{r.employeeId}</td><td className="td font-semibold">{r.name}</td><td className="td">{fmtTime(r.checkIn)}{r.late && <span className="ml-1 text-xs text-red-600">+{r.minutesLate}m</span>}</td><td className="td">{fmtTime(r.checkOut)}</td><td className="td">{fmtHM(r.workingMinutes)}</td><td className="td"><StatusBadge s={r.status} /></td>
           <td className="td text-sm">{r.verification || '-'}{r.corrected && <span className="ml-1 rounded bg-purple-100 px-1 text-xs text-purple-700">corrected</span>}</td>

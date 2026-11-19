@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { User } from '../models/User.js';
 import { SprintSubmission } from '../models/SprintSubmission.js';
-import { wrap, HttpError, requireAuth, requireRole, blockIfMustChange } from '../middleware/auth.js';
+import { wrap, HttpError, requireAuth, requireAdminPage, requireRole, blockIfMustChange, employeeScope } from '../middleware/auth.js';
 import { getSettings } from '../services/settings.js';
 import { buildReport, computeDaily } from '../services/performance.js';
 import { businessDateKey, isValidDateKey, rangeKeys } from '../utils/time.js';
 import { audit } from '../models/AuditLog.js';
+import { isSprintEligible, sprintEligibleEmployeeFilter } from '../services/sprintEligibility.js';
 
 const r = Router();
 r.use(requireAuth, blockIfMustChange);
@@ -32,9 +33,13 @@ async function state(userId, now = new Date()) {
 r.get('/eligibility', wrap(async (req, res) => {
   const st = await state(req.user._id);
   const { settings, ...rest } = st;
-  res.json({ ok: true, ...rest, serverTime: new Date().toISOString(), timezone: settings.timezone });
+  const sprintEligible = isSprintEligible(req.user);
+  res.json({ ok: true, ...rest, sprintEligible, jobRole: req.user.jobRole || 'BDE',
+    canMorning: sprintEligible && rest.canMorning, canEvening: sprintEligible && rest.canEvening,
+    serverTime: new Date().toISOString(), timezone: settings.timezone });
 }));
 r.post('/submit', requireRole('employee'), wrap(async (req, res) => {
+  if (!isSprintEligible(req.user)) throw new HttpError(403, 'Sprint updates are available only to BDE champs');
   const d = submitSchema.parse(req.body);
   const amount = d.paymentStatus === 'not_confirm' ? 0 : Math.round(d.paymentAmount ?? NaN);
   if (!Number.isFinite(amount) || amount < 0) throw new HttpError(400, 'Enter a valid payment amount');
@@ -72,24 +77,24 @@ r.get('/my', wrap(async (req, res) => {
 }));
 
 // Admin
-r.get('/daily', requireRole('admin'), wrap(async (req, res) => {
+r.get('/daily', requireAdminPage('sprint-reports'), wrap(async (req, res) => {
   const s = await getSettings();
   const rg = dateRange({ from: req.query.date, to: req.query.date }, s);
-  const emps = await User.find({ role: 'employee', archived: false }).sort({ createdAt: 1 });
+  const emps = await User.find({ ...employeeScope(req), ...sprintEligibleEmployeeFilter, archived: false }).sort({ createdAt: 1 });
   // daily view shows every day even non-working days if explicitly selected
   const rep = await report(rg, emps, { ...s, workingDays: [0, 1, 2, 3, 4, 5, 6], holidays: [] });
   res.json({ ok: true, date: rg.from, totals: rep.totals, employees: rep.employees.map((e) => ({ ...e, ...e.rows[0], rows: undefined })) });
 }));
-r.get('/report', requireRole('admin'), wrap(async (req, res) => {
+r.get('/report', requireAdminPage('performance'), wrap(async (req, res) => {
   const s = await getSettings();
   const rg = dateRange(req.query, s);
-  const emps = await User.find({ role: 'employee', archived: false, ...(req.query.employeeId ? { _id: req.query.employeeId } : {}) }).sort({ createdAt: 1 });
+  const emps = await User.find({ ...employeeScope(req), ...sprintEligibleEmployeeFilter, archived: false, ...(req.query.employeeId ? { _id: req.query.employeeId } : {}) }).sort({ createdAt: 1 });
   res.json({ ok: true, ...(await report(rg, emps, s)), weekStartDay: s.weekStartDay });
 }));
-r.get('/employee/:id', requireRole('admin'), wrap(async (req, res) => {
+r.get('/employee/:id', requireAdminPage('performance'), wrap(async (req, res) => {
   const s = await getSettings();
   const rg = dateRange(req.query, s);
-  const emp = await User.findOne({ _id: req.params.id, role: 'employee' });
+  const emp = await User.findOne({ _id: req.params.id, ...employeeScope(req), ...sprintEligibleEmployeeFilter });
   if (!emp) throw new HttpError(404, 'Not found');
   const rep = await report(rg, [emp], s);
   res.json({ ok: true, ...rep.employees[0], from: rg.from, to: rg.to, daily: rep.daily });

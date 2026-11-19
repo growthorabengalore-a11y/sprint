@@ -12,8 +12,9 @@ import { getSettings } from '../services/settings.js';
 export const strongPw = z.string().min(8).max(100).regex(/[A-Za-z]/, 'needs a letter').regex(/\d/, 'needs a digit');
 const r = Router();
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, message: { ok: false, message: 'Too many attempts. Try later.' } });
-export const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, phone: u.phone, employeeId: u.employeeId, role: u.role,
-  faceRegistered: u.faceRegistered, mustChangePassword: u.mustChangePassword });
+export const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, phone: u.phone, employeeId: u.employeeId, role: u.role, jobRole: u.jobRole || 'BDE',
+  faceRegistered: u.faceRegistered, mustChangePassword: u.mustChangePassword, branchName: u.branchName || null,
+  pagePermissions: u.pagePermissions || [] });
 
 r.post('/login', limiter, wrap(async (req, res) => {
   const { employeeId, password } = z.object({ employeeId: z.string().min(1).max(60), password: z.string().min(1).max(100) }).parse(req.body);

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { LeadCRM } from '../models/LeadCRM.js';
 import { audit } from '../models/AuditLog.js';
-import { HttpError, wrap, requireAuth, requireRole } from '../middleware/auth.js';
+import { HttpError, wrap, requireAuth, requireAdminPage } from '../middleware/auth.js';
 import { isValidDateKey } from '../utils/time.js';
 
 const r = Router();
@@ -33,7 +33,7 @@ const safeContact = (contact) => {
   };
 };
 
-r.use(requireAuth, requireRole('admin'));
+r.use(requireAuth, requireAdminPage('leads'));
 
 r.get('/', wrap(async (_req, res) => {
   const contacts = await LeadCRM.find().sort({ name: 1, createdAt: -1 }).lean();

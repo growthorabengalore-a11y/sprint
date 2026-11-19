@@ -8,7 +8,7 @@ export default function Login() {
   const [id, setId] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(''); setBusy(true);
-    try { const u = await login(id.trim(), pw); nav(u.mustChangePassword ? '/change-password' : u.role === 'admin' ? '/admin' : '/app'); }
+    try { const u = await login(id.trim(), pw); nav(u.mustChangePassword ? '/change-password' : ['admin', 'branchAdmin', 'hr', 'operations'].includes(u.role) ? '/admin' : '/app'); }
     catch (x) { setErr(errMsg(x)); } finally { setBusy(false); }
   };
   return (

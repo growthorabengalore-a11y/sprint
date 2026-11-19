@@ -8,7 +8,7 @@ import DailySprintPng from '../../reports/DailySprintPng';
 import MissingSprintPng from '../../reports/MissingSprintPng';
 
 export default function SprintReports() {
-  const stats = useFetch('/dashboard/stats');
+  const stats = useFetch('/dashboard/business-date');
   const [date, setDate] = useState<string>('');
   const eff = date || stats.data?.today || '';
   const { data, loading, error, reload } = useFetch(eff ? '/sprints/daily' : null, { date: eff });

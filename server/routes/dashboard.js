@@ -1,24 +1,30 @@
 import { Router } from 'express';
 import { User } from '../models/User.js';
 import { SprintSubmission } from '../models/SprintSubmission.js';
-import { wrap, requireAuth, requireRole } from '../middleware/auth.js';
+import { wrap, requireAuth, requireAdminPage, requireAnyAdminPage, employeeScope } from '../middleware/auth.js';
 import { getSettings } from '../services/settings.js';
 import { buildReport } from '../services/performance.js';
 import { businessDateKey, addDays, weekday } from '../utils/time.js';
+import { isSprintEligible } from '../services/sprintEligibility.js';
 
 const r = Router();
-r.use(requireAuth, requireRole('admin'));
+r.use(requireAuth);
 
-r.get('/stats', wrap(async (_req, res) => {
+r.get('/business-date', requireAnyAdminPage('dashboard', 'sprint-reports', 'attendance-reports'), wrap(async (_req, res) => {
+  const s = await getSettings();
+  res.json({ ok: true, today: businessDateKey(new Date(), s) });
+}));
+
+r.get('/stats', requireAdminPage('dashboard'), wrap(async (req, res) => {
   const s = await getSettings();
   const today = businessDateKey(new Date(), s);
   const back = (weekday(today) - s.weekStartDay + 7) % 7;
   const weekFrom = addDays(today, -back);
   const monthFrom = today.slice(0, 8) + '01';
   const allDays = { ...s, workingDays: [0, 1, 2, 3, 4, 5, 6], holidays: [] }; // "today" card always counts the day
-  const emps = await User.find({ role: 'employee', archived: false });
+  const emps = await User.find({ ...employeeScope(req), archived: false });
   const [totalEmployees, activeEmployees, disabledEmployees] = [emps.length, emps.filter((e) => e.isActive).length, emps.filter((e) => !e.isActive).length];
-  const active = emps.filter((e) => e.isActive);
+  const active = emps.filter((e) => e.isActive && isSprintEligible(e));
   const subs = await SprintSubmission.find({ dateKey: { $gte: monthFrom < weekFrom ? monthFrom : weekFrom, $lte: today }, employee: { $in: active.map((e) => e._id) } }).lean();
   const mk = (from, st) => buildReport({ employees: active, submissions: subs.filter((x) => x.dateKey >= from), from, to: today, settings: st, today });
   const day = mk(today, allDays), week = mk(weekFrom, s), month = mk(monthFrom, s);

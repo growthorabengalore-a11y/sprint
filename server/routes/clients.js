@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { Client } from '../models/Client.js';
 import { ClientIntakeLink } from '../models/ClientIntakeLink.js';
 import { audit } from '../models/AuditLog.js';
-import { HttpError, wrap, requireAuth, requireRole } from '../middleware/auth.js';
+import { HttpError, wrap, requireAuth, requireAdminPage, requireAnyAdminPage } from '../middleware/auth.js';
 import { uploadRoot } from '../services/faceFiles.js';
 import { getSettings } from '../services/settings.js';
 import { isValidDateKey, localDateKey } from '../utils/time.js';
@@ -145,9 +145,9 @@ r.post('/public/:token', publicIntakeLimit, upload.single('attachment'), wrap(as
   }
 }));
 
-r.use(requireAuth, requireRole('admin'));
+r.use(requireAuth);
 
-r.get('/intake-link', wrap(async (_req, res) => {
+r.get('/intake-link', requireAdminPage('clients'), wrap(async (_req, res) => {
   let link = await ClientIntakeLink.findById('public-client-intake');
   if (!link) {
     try {
@@ -160,12 +160,12 @@ r.get('/intake-link', wrap(async (_req, res) => {
   res.json({ ok: true, token: link.token });
 }));
 
-r.get('/export', wrap(async (req, res) => {
+r.get('/export', requireAdminPage('clients'), wrap(async (req, res) => {
   const clients = await Client.find(queryFilter(req.query)).sort({ createdAt: -1, _id: -1 });
   res.json({ ok: true, items: clients.map(safeView), total: clients.length });
 }));
 
-r.get('/', wrap(async (req, res) => {
+r.get('/', requireAdminPage('clients'), wrap(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
   const filter = queryFilter(req.query);
@@ -176,7 +176,7 @@ r.get('/', wrap(async (req, res) => {
   res.json({ ok: true, items: clients.map(safeView), total, page, limit });
 }));
 
-r.get('/summary', wrap(async (req, res) => {
+r.get('/summary', requireAdminPage('clients'), wrap(async (req, res) => {
   const settings = await getSettings();
   const today = localDateKey(new Date(), settings.timezone);
   const requestedDate = req.query.date ? String(req.query.date) : '';
@@ -198,7 +198,7 @@ r.get('/summary', wrap(async (req, res) => {
   res.json({ ok: true, date: requestedDate || null, summary: result || { totalClients: 0, uniqueClients: 0, todaySubmitted: 0 } });
 }));
 
-r.get('/search', wrap(async (req, res) => {
+r.get('/search', requireAdminPage('client-data'), wrap(async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) throw new HttpError(400, 'Enter a name, email, company, or phone number');
   const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -207,7 +207,7 @@ r.get('/search', wrap(async (req, res) => {
   res.json({ ok: true, client: safeView(client) });
 }));
 
-r.post('/', upload.single('attachment'), wrap(async (req, res) => {
+r.post('/', requireAdminPage('clients'), upload.single('attachment'), wrap(async (req, res) => {
   const data = parseClientBody(req.body);
   let attachment;
   try {
@@ -221,7 +221,7 @@ r.post('/', upload.single('attachment'), wrap(async (req, res) => {
   }
 }));
 
-r.get('/:id/file', wrap(async (req, res) => {
+r.get('/:id/file', requireAnyAdminPage('clients', 'client-data'), wrap(async (req, res) => {
   const client = await Client.findById(req.params.id);
   if (!client?.attachment?.path) throw new HttpError(404, 'Attachment not found');
   const root = uploadRoot();
@@ -232,13 +232,13 @@ r.get('/:id/file', wrap(async (req, res) => {
   res.sendFile(target);
 }));
 
-r.get('/:id', wrap(async (req, res) => {
+r.get('/:id', requireAdminPage('clients'), wrap(async (req, res) => {
   const client = await Client.findById(req.params.id);
   if (!client) throw new HttpError(404, 'Client not found');
   res.json({ ok: true, client: safeView(client) });
 }));
 
-r.put('/:id', upload.single('attachment'), wrap(async (req, res) => {
+r.put('/:id', requireAdminPage('clients'), upload.single('attachment'), wrap(async (req, res) => {
   const data = parseClientBody(req.body);
   const client = await Client.findById(req.params.id);
   if (!client) throw new HttpError(404, 'Client not found');
@@ -258,7 +258,7 @@ r.put('/:id', upload.single('attachment'), wrap(async (req, res) => {
   res.json({ ok: true, client: safeView(client) });
 }));
 
-r.patch('/:id/status', wrap(async (req, res) => {
+r.patch('/:id/status', requireAdminPage('clients'), wrap(async (req, res) => {
   const { status } = statusSchema.parse(req.body);
   const client = await Client.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true });
   if (!client) throw new HttpError(404, 'Client not found');
@@ -266,7 +266,7 @@ r.patch('/:id/status', wrap(async (req, res) => {
   res.json({ ok: true, client: safeView(client) });
 }));
 
-r.delete('/:id', wrap(async (req, res) => {
+r.delete('/:id', requireAnyAdminPage('clients', 'client-data'), wrap(async (req, res) => {
   const client = await Client.findByIdAndDelete(req.params.id);
   if (!client) throw new HttpError(404, 'Client not found');
   if (client.attachment?.path) await removeAttachment(client.attachment.path);
