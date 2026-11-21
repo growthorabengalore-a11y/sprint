@@ -47,7 +47,7 @@ export default function Sprint() {
       {open && <div className="card space-y-3 border-crimson-500 p-4">
         <div className="flex items-center justify-between"><h2 className="font-bold capitalize">{open} sprint {open === 'morning' ? '— projection' : '— achieved'}</h2><button onClick={() => setOpen(null)} aria-label="Cancel"><FiX /></button></div>
         <div><label className="label">Talk time</label><Combo options={talkOptions} value={talk} onChange={setTalk} placeholder="Search e.g. 1 hour 10 min" /></div>
-        <div><label className="label">Leads / Documentation</label><Combo options={leadOptions} value={leads} onChange={setLeads} inputMode="numeric" placeholder="0–50, or type a larger number" parseCustom={parseLeads} /></div>
+        <div><label className="label">Leads / Documentation</label><Combo options={leadOptions} value={leads} onChange={setLeads} inputMode="numeric" placeholder="0–50, or type a larger number" parseCustom={parseLeads} commitOnBlur /></div>
         <div><label className="label">Payments</label><Combo options={payOptions} value={pay} onChange={setPay} inputMode="text" placeholder="Search or type amount e.g. 7500" parseCustom={parsePayment} /></div>
         <p className="text-xs text-slate-500">“Not Confirm” is not counted as collected money. Submitted records cannot be edited.</p>
         <button className="btn btn-primary w-full" disabled={busy} onClick={submit}>{busy ? 'Submitting…' : `Submit ${open} sprint`}</button></div>}

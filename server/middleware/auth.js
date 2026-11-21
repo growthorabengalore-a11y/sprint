@@ -34,8 +34,12 @@ export const requireAnyAdminPage = (...pages) => (req, _res, next) => {
 };
 export const employeeScope = (req) => {
   const filter = { role: 'employee' };
-  if (['branchAdmin', 'hr', 'operations'].includes(req.user?.role)) {
-    filter.branchId = req.user.branchId || { $in: [] };
+  if (req.user?.branchId) {
+    filter.branchId = req.user.branchId;
+  } else if (req.user?.role === 'admin') {
+    filter.branchId = null;
+  } else if (['branchAdmin', 'hr', 'operations'].includes(req.user?.role)) {
+    filter.branchId = { $in: [] };
   }
   return filter;
 };

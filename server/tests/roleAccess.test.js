@@ -37,8 +37,9 @@ test('new admin accounts must change their password before using admin APIs', ()
   assert.equal(access(requireAnyAdminPage('dashboard', 'attendance-reports'), branchAdmin).error.extra.code, 'MUST_CHANGE_PASSWORD');
 });
 
-test('branch employee queries are isolated, while central admin queries remain unscoped', () => {
-  assert.deepEqual(employeeScope({ user: { role: 'admin' } }), { role: 'employee' });
+test('employee queries stay within the assigned branch, with central admin limited to unassigned Bangalore champs', () => {
+  assert.deepEqual(employeeScope({ user: { role: 'admin' } }), { role: 'employee', branchId: null });
+  assert.deepEqual(employeeScope({ user: { role: 'admin', branchId: 'branch-bangalore' } }), { role: 'employee', branchId: 'branch-bangalore' });
   assert.deepEqual(employeeScope({ user: { role: 'branchAdmin', branchId: 'branch-a' } }), { role: 'employee', branchId: 'branch-a' });
   assert.deepEqual(employeeScope({ user: { role: 'hr', branchId: 'branch-b' } }), { role: 'employee', branchId: 'branch-b' });
   assert.deepEqual(employeeScope({ user: { role: 'operations', branchId: 'branch-c' } }), { role: 'employee', branchId: 'branch-c' });

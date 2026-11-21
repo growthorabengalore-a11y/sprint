@@ -266,11 +266,12 @@ r.patch('/:id/correct', ...adm, wrap(async (req, res) => {
 // protected face image: admin or the owner only
 r.get('/face-image/:employeeId/:index', requireAuth, blockIfMustChange, wrap(async (req, res) => {
   const isOwner = String(req.user._id) === req.params.employeeId;
-  const isAdmin = req.user.role === 'admin';
-  const isScopedManager = ['branchAdmin', 'hr', 'operations'].includes(req.user.role)
-    && (req.user.role === 'branchAdmin' || req.user.pagePermissions?.includes('champs'))
+  const canManageEmployees = req.user.role === 'admin'
+    || (['branchAdmin', 'hr', 'operations'].includes(req.user.role)
+      && (req.user.role === 'branchAdmin' || req.user.pagePermissions?.includes('champs')));
+  const hasEmployeeAccess = canManageEmployees
     && await User.exists({ _id: req.params.employeeId, ...employeeScope(req) });
-  if (!isAdmin && !isOwner && !isScopedManager) throw new HttpError(403, 'Forbidden');
+  if (!isOwner && !hasEmployeeAccess) throw new HttpError(403, 'Forbidden');
   const reg = await FaceRegistration.findOne({ employee: req.params.employeeId });
   const rel = reg?.imagePaths?.[+req.params.index];
   if (!rel) throw new HttpError(404, 'Not found');

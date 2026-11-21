@@ -30,9 +30,9 @@ export function ToastHost() {
   return <div className="fixed top-3 right-3 left-3 sm:left-auto z-[60] space-y-2">{items.map((t) => <div key={t.id} className={`rounded-lg px-4 py-3 text-sm text-white shadow-lg ${t.kind === 'ok' ? 'bg-emerald-600' : 'bg-red-600'}`}>{t.msg}</div>)}</div>;
 }
 /** Searchable dropdown with optional manual entry. */
-export function Combo({ options, value, onChange, placeholder, parseCustom, inputMode = 'text', disabled }: {
+export function Combo({ options, value, onChange, placeholder, parseCustom, inputMode = 'text', disabled, commitOnBlur = false }: {
   options: { value: string; label: string }[]; value: string | null; onChange: (v: string | null) => void; placeholder?: string;
-  parseCustom?: (text: string) => { value: string; label: string } | null; inputMode?: any; disabled?: boolean;
+  parseCustom?: (text: string) => { value: string; label: string } | null; inputMode?: any; disabled?: boolean; commitOnBlur?: boolean;
 }) {
   const [text, setText] = useState(''); const [open, setOpen] = useState(false); const [custom, setCustom] = useState<{ value: string; label: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -46,12 +46,20 @@ export function Combo({ options, value, onChange, placeholder, parseCustom, inpu
   }, [open, text, options]); // eslint-disable-line
   const pick = (o: { value: string; label: string }) => { onChange(o.value); setText(o.label); setOpen(false); };
   const tryCustom = () => { const c = parseCustom?.(text); if (c) { setCustom(c); pick(c); return true; } return false; };
+  const commitTypedValue = () => {
+    const exact = options.find((option) => option.value === text.trim() || option.label === text.trim());
+    if (exact) { pick(exact); return; }
+    if (tryCustom()) return;
+    setOpen(false);
+    setText(selected?.label || '');
+  };
   const customPreview = open && q && parseCustom ? parseCustom(text) : null;
   return (
     <div className="relative" ref={ref}>
       <div className="relative">
         <input className="input pr-9" disabled={disabled} inputMode={inputMode} placeholder={placeholder} value={text}
           onFocus={(e) => { setOpen(true); e.target.select(); }} onChange={(e) => { setText(e.target.value); setOpen(true); }}
+          onBlur={() => { if (commitOnBlur) commitTypedValue(); }}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (filtered[0] && !customPreview) pick(filtered[0]); else tryCustom(); } }} />
         <FiChevronDown className="absolute right-3 top-3.5 text-slate-400 pointer-events-none" />
       </div>
