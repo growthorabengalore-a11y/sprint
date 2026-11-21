@@ -7,6 +7,7 @@ import { Combo, ErrorBox, Skeleton, toast, parseLeads, parsePayment } from '../.
 import { talkOptions, leadOptions, payOptions, fmtMinutes, pct, inr, payCell } from '../../utils/format';
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
+const LEAD_SUBMISSION_URL = 'https://forms.gle/WUECs4ApDnEbEYEq8';
 export default function Sprint() {
   const { data, loading, error, reload } = useFetch('/sprints/eligibility');
   const [open, setOpen] = useState<'morning' | 'evening' | null>(null);
@@ -36,7 +37,12 @@ export default function Sprint() {
       <div className="card p-4"><div className="flex items-center gap-2 font-bold"><FiSun className="text-amber-500" /> Morning Sprint <span className="text-xs font-normal text-slate-500">(what you plan / commit to achieve today)</span></div>
         {m ? <><div className="mt-1 flex items-center gap-1 text-sm text-emerald-700"><FiCheckCircle /> Submitted</div><Summary x={m} /></> : data.sprintEligible ? <button className="btn btn-primary mt-3 w-full" disabled={!data.canMorning} onClick={() => { reset(); setOpen('morning'); }}>Submit Morning Sprint</button> : <p className="mt-3 text-sm text-slate-500">Not available for your role.</p>}</div>
       <div className="card p-4"><div className="flex items-center gap-2 font-bold"><FiMoon className="text-indigo-500" /> Evening Sprint <span className="text-xs font-normal text-slate-500">(what you actually achieved today)</span></div>
-        {e ? <><div className="mt-1 flex items-center gap-1 text-sm text-emerald-700"><FiCheckCircle /> Submitted</div><Summary x={e} /></> : data.sprintEligible ? <button className="btn btn-primary mt-3 w-full" disabled={!data.canEvening} onClick={() => { reset(); setOpen('evening'); }}>{data.canEvening ? 'Submit Evening Sprint' : 'Submit morning sprint first'}</button> : <p className="mt-3 text-sm text-slate-500">Not available for your role.</p>}</div>
+        {e ? <><div className="mt-1 flex items-center gap-1 text-sm text-emerald-700"><FiCheckCircle /> Submitted</div><Summary x={e} />
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-semibold text-amber-900">Received any leads today? Submitting them through this form is mandatory.</p>
+            <a className="btn btn-primary mt-3" href={LEAD_SUBMISSION_URL} target="_blank" rel="noopener noreferrer">Submit your leads here</a>
+          </div>
+        </> : data.sprintEligible ? <button className="btn btn-primary mt-3 w-full" disabled={!data.canEvening} onClick={() => { reset(); setOpen('evening'); }}>{data.canEvening ? 'Submit Evening Sprint' : 'Submit morning sprint first'}</button> : <p className="mt-3 text-sm text-slate-500">Not available for your role.</p>}</div>
       {m && e && <div className="rounded-lg bg-slate-100 p-3 text-center text-sm">Both sprints done for today. Morning reopens from 8:00 AM the next day.</div>}
       {open && <div className="card space-y-3 border-crimson-500 p-4">
         <div className="flex items-center justify-between"><h2 className="font-bold capitalize">{open} sprint {open === 'morning' ? '— projection' : '— achieved'}</h2><button onClick={() => setOpen(null)} aria-label="Cancel"><FiX /></button></div>

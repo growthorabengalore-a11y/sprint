@@ -19,6 +19,7 @@ type LeadUpdate = {
 };
 type LeadDetail = { assignedTo: string; leadStatus: 'Cold' | 'Warm' | 'Hot'; paymentStatus: string; leadCount?: number };
 const emptyLead = (): LeadDetail => ({ assignedTo: '', leadStatus: 'Warm', paymentStatus: '' });
+const LEAD_SUBMISSION_URL = 'https://forms.gle/WUECs4ApDnEbEYEq8';
 
 function submittedAt(value: string) {
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
@@ -119,6 +120,10 @@ export default function LeadUpdates() {
           </table>
         </div>}
       </section>
+      {sortedItems.length > 0 && <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+        <p className="text-sm font-semibold text-amber-900">Received any leads? Submitting them through this form is mandatory.</p>
+        <a className="btn btn-primary mt-3" href={LEAD_SUBMISSION_URL} target="_blank" rel="noopener noreferrer">Submit your leads here</a>
+      </section>}
       <div className="fixed -left-[12000px] top-0 pointer-events-none" aria-hidden="true"><EmployeeLeadUpdatesPng ref={reportRef} name={user.name} from={sortedItems[sortedItems.length - 1]?.dateKey || ''} to={sortedItems[0]?.dateKey || ''} items={sortedItems} /></div>
       {entering && <Modal title="Enter lead update" onClose={() => setEntering(false)}><LeadForm employeeName={user.name} busy={busy} onClose={() => setEntering(false)} onSubmit={save} /></Modal>}
     </div>
