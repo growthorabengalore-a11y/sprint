@@ -6,7 +6,7 @@ import { ErrorBox, Skeleton, toast } from '../../components/ui';
 const pages = [
   ['dashboard', 'Dashboard'], ['champs', 'Champs'], ['sprint-reports', 'Sprint Reports'], ['performance', 'Performance Reports'],
   ['attendance', 'Attendance Dashboard'], ['attendance-reports', 'Attendance Reports'], ['clients', 'Clients'],
-  ['client-data', 'Client Data'], ['team-target', 'Team Leader Target'], ['leads', 'Leads Management'], ['settings', 'Settings'],
+  ['client-data', 'Client Data'], ['team-target', 'Team Leader Target'], ['team-performance', 'Team Performance'], ['leads', 'Leads Management'], ['settings', 'Settings'],
 ];
 
 export default function RolesCreation() {

@@ -38,12 +38,6 @@ export function Combo({ options, value, onChange, placeholder, parseCustom, inpu
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value) || (custom && custom.value === value ? custom : null);
   useEffect(() => { setText(selected?.label || ''); }, [value]); // eslint-disable-line
-  useEffect(() => { const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) { setOpen(false); setText(selected?.label || ''); } }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, [selected]);
-  const q = text.trim().toLowerCase(); const qd = q.replace(/[^\d]/g, '');
-  const filtered = useMemo(() => {
-    if (!open || (selected && text === selected.label)) return options.slice(0, 80);
-    return options.filter((o) => o.label.toLowerCase().includes(q) || (qd && o.value.includes(qd)) || (qd && o.label.replace(/[^\d]/g, '').includes(qd))).slice(0, 80);
-  }, [open, text, options]); // eslint-disable-line
   const pick = (o: { value: string; label: string }) => { onChange(o.value); setText(o.label); setOpen(false); };
   const tryCustom = () => { const c = parseCustom?.(text); if (c) { setCustom(c); pick(c); return true; } return false; };
   const commitTypedValue = () => {
@@ -53,6 +47,22 @@ export function Combo({ options, value, onChange, placeholder, parseCustom, inpu
     setOpen(false);
     setText(selected?.label || '');
   };
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) {
+        if (commitOnBlur) commitTypedValue();
+        else setText(selected?.label || '');
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [selected, commitOnBlur, text, options, parseCustom, onChange]);
+  const q = text.trim().toLowerCase(); const qd = q.replace(/[^\d]/g, '');
+  const filtered = useMemo(() => {
+    if (!open || (selected && text === selected.label)) return options.slice(0, 80);
+    return options.filter((o) => o.label.toLowerCase().includes(q) || (qd && o.value.includes(qd)) || (qd && o.label.replace(/[^\d]/g, '').includes(qd))).slice(0, 80);
+  }, [open, text, options]); // eslint-disable-line
   const customPreview = open && q && parseCustom ? parseCustom(text) : null;
   return (
     <div className="relative" ref={ref}>

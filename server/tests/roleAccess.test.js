@@ -31,6 +31,13 @@ test('Operation Team page access is limited to its assigned pages', () => {
   assert.equal(access(requireAnyAdminPage('dashboard', 'attendance-reports'), operations).passed, true);
 });
 
+test('team performance page access follows the assigned admin-page permissions', () => {
+  assert.equal(access(requireAdminPage('team-performance'), { role: 'admin' }).passed, true);
+  assert.equal(access(requireAdminPage('team-performance'), { role: 'branchAdmin' }).passed, true);
+  assert.equal(access(requireAdminPage('team-performance'), { role: 'hr', pagePermissions: ['team-performance'] }).passed, true);
+  assert.equal(access(requireAdminPage('team-performance'), { role: 'operations', pagePermissions: [] }).error.status, 403);
+});
+
 test('new admin accounts must change their password before using admin APIs', () => {
   const branchAdmin = { role: 'branchAdmin', mustChangePassword: true };
   assert.equal(access(requireAdminPage('champs'), branchAdmin).error.extra.code, 'MUST_CHANGE_PASSWORD');

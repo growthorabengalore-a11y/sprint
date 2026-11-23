@@ -9,7 +9,7 @@ import { strongPw } from './auth.js';
 
 const r = Router();
 const pages = ['dashboard', 'champs', 'sprint-reports', 'performance', 'attendance', 'attendance-reports',
-  'clients', 'client-data', 'team-target', 'leads', 'settings'];
+  'clients', 'client-data', 'team-target', 'team-performance', 'leads', 'settings'];
 const accountId = z.string().trim().min(2).max(60).regex(/^[A-Za-z0-9._-]+$/, 'Use letters, numbers, dots, underscores, or hyphens');
 r.use(requireAuth, requireRole('admin'));
 
