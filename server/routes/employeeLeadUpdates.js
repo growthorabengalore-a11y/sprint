@@ -9,6 +9,11 @@ import { getSettings } from '../services/settings.js';
 import { businessDateKey, isValidDateKey } from '../utils/time.js';
 
 const r = Router();
+const editWindowMs = 60 * 60 * 1000;
+export const isEmployeeLeadUpdateEditable = (update, now, today) => {
+  const age = now.getTime() - new Date(update.createdAt).getTime();
+  return update.dateKey === today && age >= 0 && age < editWindowMs;
+};
 const leadSchema = z.object({
   assignedTo: z.string().trim().min(1).max(100),
   leadStatus: z.enum(['Cold', 'Warm', 'Hot']),
@@ -27,7 +32,7 @@ const leaderRemarksInput = z.object({
   leaderRemarks: z.string().trim().max(500),
 }).strict();
 
-function safeUpdate(update, employee) {
+function safeUpdate(update, employee, editableUntil = null) {
   const leads = Array.isArray(update.leads) && update.leads.length
     ? update.leads
     : [{
@@ -44,6 +49,7 @@ function safeUpdate(update, employee) {
     employeeCode: employee.employeeId,
     dateKey: update.dateKey,
     leadCount: update.leadCount || leads.length,
+    editableUntil,
     leads: leads.map((lead) => ({
       assignedTo: lead.assignedTo,
       leadStatus: lead.leadStatus,
@@ -60,7 +66,15 @@ r.use(requireAuth, blockIfMustChange);
 
 r.get('/my', requireRole('employee'), wrap(async (req, res) => {
   const updates = await EmployeeLeadUpdate.find({ employee: req.user._id }).sort({ createdAt: -1 }).limit(1000).lean();
-  res.json({ ok: true, items: updates.map((update) => safeUpdate(update, req.user)) });
+  const now = new Date();
+  const settings = await getSettings();
+  const today = businessDateKey(now, settings);
+  res.json({ ok: true, items: updates.map((update) => {
+    const editableUntil = isEmployeeLeadUpdateEditable(update, now, today)
+      ? new Date(new Date(update.createdAt).getTime() + editWindowMs).toISOString()
+      : null;
+    return safeUpdate(update, req.user, editableUntil);
+  }) });
 }));
 
 r.post('/', requireRole('employee'), wrap(async (req, res) => {
@@ -75,6 +89,32 @@ r.post('/', requireRole('employee'), wrap(async (req, res) => {
   });
   audit(req, 'employee_lead_update_create', String(update._id), { dateKey, leadCount: update.leadCount });
   res.status(201).json({ ok: true, item: safeUpdate(update, req.user) });
+}));
+
+r.put('/:id', requireRole('employee'), wrap(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');
+  const input = leadInput.parse(req.body);
+  const update = await findEditableUpdate(req.params.id, req.user._id);
+  update.leadCount = input.leads.length;
+  update.leads = input.leads.map((lead, index) => ({
+    ...lead,
+    leaderRemarks: update.leads?.[index]?.leaderRemarks ?? (index === 0 ? update.leaderRemarks : ''),
+  }));
+  update.leaderRemarks = undefined;
+  update.assignedTo = undefined;
+  update.leadStatus = undefined;
+  update.paymentStatus = undefined;
+  await update.save();
+  audit(req, 'employee_lead_update_edit', String(update._id), { dateKey: update.dateKey, leadCount: update.leadCount });
+  res.json({ ok: true, item: safeUpdate(update, req.user) });
+}));
+
+r.delete('/:id', requireRole('employee'), wrap(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');
+  const update = await findEditableUpdate(req.params.id, req.user._id);
+  await update.deleteOne();
+  audit(req, 'employee_lead_update_delete', String(update._id), { dateKey: update.dateKey, leadCount: update.leadCount });
+  res.json({ ok: true });
 }));
 
 r.get('/admin', requireAdminPage('leads'), wrap(async (req, res) => {
@@ -97,6 +137,17 @@ r.get('/admin', requireAdminPage('leads'), wrap(async (req, res) => {
     return employee ? [safeUpdate(update, employee)] : [];
   }) });
 }));
+
+async function findEditableUpdate(id, employeeId) {
+  const update = await EmployeeLeadUpdate.findOne({ _id: id, employee: employeeId });
+  if (!update) throw new HttpError(404, 'Lead update not found');
+  const now = new Date();
+  const settings = await getSettings();
+  if (!isEmployeeLeadUpdateEditable(update, now, businessDateKey(now, settings))) {
+    throw new HttpError(403, 'Lead updates can only be edited or deleted within one hour of submission on the same business day.');
+  }
+  return update;
+}
 
 r.put('/admin/:id', requireAdminPage('leads'), wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');

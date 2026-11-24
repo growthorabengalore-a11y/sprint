@@ -1,8 +1,8 @@
-import { FormEvent, useMemo, useRef, useState } from 'react';
-import { FiDownload, FiPlus, FiRefreshCw } from 'react-icons/fi';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FiDownload, FiEdit2, FiPlus, FiRefreshCw, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../auth';
 import { api, errMsg } from '../../api';
-import { Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
+import { Confirm, Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
 import { useFetch } from '../../components/useFetch';
 import EmployeeLeadUpdatesPng from '../../reports/EmployeeLeadUpdatesPng';
 import { downloadPng } from '../../utils/exportPng';
@@ -16,6 +16,7 @@ type LeadUpdate = {
   leadCount: number;
   leads: LeadDetail[];
   createdAt: string;
+  editableUntil: string | null;
 };
 type LeadDetail = { assignedTo: string; leadStatus: 'Cold' | 'Warm' | 'Hot'; paymentStatus: string; leadCount?: number };
 const emptyLead = (): LeadDetail => ({ assignedTo: '', leadStatus: 'Warm', paymentStatus: '' });
@@ -26,10 +27,15 @@ function submittedAt(value: string) {
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: string; busy: boolean; onClose: () => void; onSubmit: (data: { leads: LeadDetail[] }) => Promise<void> }) {
-  const [leadCount, setLeadCount] = useState('1');
-  const [leads, setLeads] = useState<LeadDetail[]>([emptyLead()]);
-  const [otherAssignees, setOtherAssignees] = useState<Record<number, string>>({});
+function LeadForm({ employeeName, initial, busy, onClose, onSubmit }: { employeeName: string; initial?: LeadUpdate; busy: boolean; onClose: () => void; onSubmit: (data: { leads: LeadDetail[] }) => Promise<void> }) {
+  const [leadCount, setLeadCount] = useState(String(initial?.leads.length || 1));
+  const [leads, setLeads] = useState<LeadDetail[]>(() => initial?.leads.map((lead) => ({
+    ...lead,
+    assignedTo: LEAD_ASSIGNEES.includes(lead.assignedTo) ? lead.assignedTo : 'Other',
+  })) || [emptyLead()]);
+  const [otherAssignees, setOtherAssignees] = useState<Record<number, string>>(() => Object.fromEntries(
+    (initial?.leads || []).flatMap((lead, index) => LEAD_ASSIGNEES.includes(lead.assignedTo) ? [] : [[index, lead.assignedTo]]),
+  ));
   const resizeLeads = (value: string) => {
     setLeadCount(value);
     const count = Number(value);
@@ -67,7 +73,7 @@ function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: str
           <div><label className="label" htmlFor={`lead-payment-${index}`}>Payment status / next step</label><textarea id={`lead-payment-${index}`} className="input resize-y" rows={2} maxLength={500} required value={lead.paymentStatus} onChange={(event) => changeLead(index, { paymentStatus: event.target.value })} placeholder="e.g. Will pay tomorrow, quote sent" /></div>
         </fieldset>)}
       </div>
-      <div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Submitting…' : 'Submit lead update'}</button></div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-3"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Submit lead update'}</button></div>
     </form>
   );
 }
@@ -76,18 +82,27 @@ export default function LeadUpdates() {
   const { user } = useAuth();
   const { data, loading, error, reload } = useFetch<{ items: LeadUpdate[] }>('/lead-updates/my');
   const [entering, setEntering] = useState(false);
+  const [editing, setEditing] = useState<LeadUpdate | null>(null);
+  const [deleting, setDeleting] = useState<LeadUpdate | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const reportRef = useRef<HTMLDivElement>(null);
   const items = data?.items || [];
   const sortedItems = useMemo(() => [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [items]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 10000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  const save = async (input: { leads: LeadDetail[] }) => {
+  const save = async (input: { leads: LeadDetail[] }, update?: LeadUpdate) => {
     setBusy(true);
     try {
-      await api.post('/lead-updates', input);
+      if (update) await api.put(`/lead-updates/${update.id}`, input);
+      else await api.post('/lead-updates', input);
       setEntering(false);
-      toast('Lead update submitted.');
+      setEditing(null);
+      toast(update ? 'Lead update saved.' : 'Lead update submitted.');
       await reload();
     } catch (requestError) {
       toast(errMsg(requestError), 'err');
@@ -95,6 +110,21 @@ export default function LeadUpdates() {
       setBusy(false);
     }
   };
+  const deleteUpdate = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await api.delete(`/lead-updates/${deleting.id}`);
+      setDeleting(null);
+      toast('Lead update deleted.');
+      await reload();
+    } catch (requestError) {
+      toast(errMsg(requestError), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const canEdit = (item: LeadUpdate) => !!item.editableUntil && now < new Date(item.editableUntil).getTime();
   const exportPng = async () => {
     if (!reportRef.current || !sortedItems.length) return;
     setExporting(true);
@@ -125,10 +155,14 @@ export default function LeadUpdates() {
           <button type="button" className="btn btn-ghost !min-h-[36px] !px-3 text-xs" disabled={!sortedItems.length || exporting} onClick={() => void exportPng()}><FiDownload />{exporting ? 'Preparing…' : 'Download PNG report'}</button>
         </div>
         {!sortedItems.length ? <Empty text="No lead updates submitted yet." /> : <div className="overflow-x-auto">
-          <table className="w-full min-w-[780px]"><thead><tr>{['Date', 'Submitted at', 'Lead count', 'Individual lead details'].map((heading) => <th key={heading} className="th">{heading}</th>)}</tr></thead>
+          <table className="w-full min-w-[900px]"><thead><tr>{['Date', 'Submitted at', 'Lead count', 'Individual lead details', 'Actions'].map((heading) => <th key={heading} className="th">{heading}</th>)}</tr></thead>
             <tbody>{sortedItems.map((item) => <tr key={item.id}>
               <td className="td">{fmtDate(item.dateKey)}</td><td className="td">{submittedAt(item.createdAt)}</td><td className="td font-semibold">{item.leadCount}</td>
               <td className="td whitespace-normal">{item.leads.map((lead, index) => <div key={index} className="mb-2 last:mb-0"><span className="font-semibold">Lead {index + 1}:</span> assigned to {lead.assignedTo} · {lead.leadStatus} · {lead.paymentStatus}</div>)}</td>
+              <td className="td"><div className="flex gap-2">
+                <button type="button" className="btn btn-ghost !min-h-[34px] !px-2.5 text-xs" disabled={!canEdit(item) || busy} title={canEdit(item) ? 'Available for one hour after submission' : 'Editing is available for one hour after submission'} onClick={() => setEditing(item)}><FiEdit2 />Edit</button>
+                <button type="button" className="btn btn-ghost !min-h-[34px] !px-2.5 text-xs text-red-600" disabled={!canEdit(item) || busy} title={canEdit(item) ? 'Available for one hour after submission' : 'Deleting is available for one hour after submission'} onClick={() => setDeleting(item)}><FiTrash2 />Delete</button>
+              </div>{canEdit(item) && <p className="mt-1 text-[10px] text-slate-500">Available for one hour after submission</p>}</td>
             </tr>)}</tbody>
           </table>
         </div>}
@@ -138,7 +172,9 @@ export default function LeadUpdates() {
         <a className="btn btn-primary mt-3" href={LEAD_SUBMISSION_URL} target="_blank" rel="noopener noreferrer">Submit your leads here</a>
       </section>}
       <div className="fixed -left-[12000px] top-0 pointer-events-none" aria-hidden="true"><EmployeeLeadUpdatesPng ref={reportRef} name={user.name} from={sortedItems[sortedItems.length - 1]?.dateKey || ''} to={sortedItems[0]?.dateKey || ''} items={sortedItems} /></div>
-      {entering && <Modal title="Enter lead update" onClose={() => setEntering(false)}><LeadForm employeeName={user.name} busy={busy} onClose={() => setEntering(false)} onSubmit={save} /></Modal>}
+      {entering && <Modal title="Enter lead update" onClose={() => setEntering(false)}><LeadForm employeeName={user.name} busy={busy} onClose={() => setEntering(false)} onSubmit={(input) => save(input)} /></Modal>}
+      {editing && <Modal title={`Edit lead update · ${fmtDate(editing.dateKey)}`} onClose={() => setEditing(null)}><LeadForm key={editing.id} employeeName={user.name} initial={editing} busy={busy} onClose={() => setEditing(null)} onSubmit={(input) => save(input, editing)} /></Modal>}
+      {deleting && <Confirm title="Delete lead update?" text={`Delete this lead update from ${fmtDate(deleting.dateKey)}? This cannot be undone.`} busy={busy} onNo={() => setDeleting(null)} onYes={() => void deleteUpdate()} />}
     </div>
   );
 }
