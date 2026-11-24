@@ -4,6 +4,7 @@ const leadSchema = new mongoose.Schema({
   assignedTo: { type: String, required: true, trim: true, maxlength: 100 },
   leadStatus: { type: String, required: true, enum: ['Cold', 'Warm', 'Hot'] },
   paymentStatus: { type: String, required: true, trim: true, maxlength: 500 },
+  leaderRemarks: { type: String, trim: true, maxlength: 500, default: '' },
 }, { _id: false });
 
 const schema = new mongoose.Schema({
@@ -14,6 +15,7 @@ const schema = new mongoose.Schema({
   assignedTo: { type: String, trim: true, maxlength: 100 },
   leadStatus: { type: String, enum: ['Cold', 'Warm', 'Hot'] },
   paymentStatus: { type: String, trim: true, maxlength: 500 },
+  leaderRemarks: { type: String, trim: true, maxlength: 500, default: '' },
 }, { timestamps: true });
 
 schema.index({ employee: 1, dateKey: -1 });

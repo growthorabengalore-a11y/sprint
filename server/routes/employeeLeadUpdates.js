@@ -9,12 +9,22 @@ import { getSettings } from '../services/settings.js';
 import { businessDateKey, isValidDateKey } from '../utils/time.js';
 
 const r = Router();
-const leadInput = z.object({
-  leads: z.array(z.object({
+const leadSchema = z.object({
   assignedTo: z.string().trim().min(1).max(100),
   leadStatus: z.enum(['Cold', 'Warm', 'Hot']),
   paymentStatus: z.string().trim().min(1).max(500),
+}).strict();
+const leadInput = z.object({
+  leads: z.array(leadSchema).min(1).max(100),
+}).strict();
+const adminLeadInput = z.object({
+  leads: z.array(leadSchema.extend({
+    leaderRemarks: z.string().trim().max(500).optional(),
   }).strict()).min(1).max(100),
+}).strict();
+const leaderRemarksInput = z.object({
+  leadIndex: z.number().int().min(0).max(99),
+  leaderRemarks: z.string().trim().max(500),
 }).strict();
 
 function safeUpdate(update, employee) {
@@ -24,6 +34,7 @@ function safeUpdate(update, employee) {
       assignedTo: update.assignedTo || '—',
       leadStatus: update.leadStatus || 'Cold',
       paymentStatus: update.paymentStatus || '',
+      leaderRemarks: update.leaderRemarks || '',
       legacyCount: update.leadCount,
     }];
   return {
@@ -37,6 +48,7 @@ function safeUpdate(update, employee) {
       assignedTo: lead.assignedTo,
       leadStatus: lead.leadStatus,
       paymentStatus: lead.paymentStatus,
+      leaderRemarks: lead.leaderRemarks || '',
       leadCount: lead.legacyCount || 1,
     })),
     createdAt: update.createdAt,
@@ -88,17 +100,42 @@ r.get('/admin', requireAdminPage('leads'), wrap(async (req, res) => {
 
 r.put('/admin/:id', requireAdminPage('leads'), wrap(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');
-  const input = leadInput.parse(req.body);
+  const input = adminLeadInput.parse(req.body);
   const scopedEmployees = await User.find(employeeScope(req)).distinct('_id');
-  const update = await EmployeeLeadUpdate.findOneAndUpdate({ _id: req.params.id, employee: { $in: scopedEmployees } }, {
-    $set: { leadCount: input.leads.length, leads: input.leads },
-    $unset: { assignedTo: 1, leadStatus: 1, paymentStatus: 1 },
-  }, { new: true, runValidators: true });
+  const update = await EmployeeLeadUpdate.findOne({ _id: req.params.id, employee: { $in: scopedEmployees } });
   if (!update) throw new HttpError(404, 'Lead update not found');
+  update.leadCount = input.leads.length;
+  update.leads = input.leads.map((lead, index) => ({
+    ...lead,
+    leaderRemarks: lead.leaderRemarks ?? update.leads?.[index]?.leaderRemarks ?? (index === 0 ? update.leaderRemarks : ''),
+  }));
+  update.leaderRemarks = undefined;
+  update.assignedTo = undefined;
+  update.leadStatus = undefined;
+  update.paymentStatus = undefined;
+  await update.save();
   const employee = await User.findById(update.employee).select('_id name employeeId').lean();
   if (!employee) throw new HttpError(404, 'Employee not found');
   audit(req, 'employee_lead_update_admin_edit', String(update._id), { employeeId: employee.employeeId, dateKey: update.dateKey });
   res.json({ ok: true, item: safeUpdate(update, employee) });
+}));
+
+r.put('/admin/:id/remarks', requireAdminPage('leads'), wrap(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(404, 'Lead update not found');
+  const input = leaderRemarksInput.parse(req.body);
+  const scopedEmployees = await User.find(employeeScope(req)).distinct('_id');
+  const update = await EmployeeLeadUpdate.findOne({ _id: req.params.id, employee: { $in: scopedEmployees } });
+  if (!update) throw new HttpError(404, 'Lead update not found');
+  if (Array.isArray(update.leads) && update.leads.length) {
+    if (input.leadIndex >= update.leads.length) throw new HttpError(400, 'Lead not found in this update');
+    update.leads[input.leadIndex].leaderRemarks = input.leaderRemarks;
+  } else {
+    if (input.leadIndex !== 0) throw new HttpError(400, 'Lead not found in this update');
+    update.leaderRemarks = input.leaderRemarks;
+  }
+  await update.save();
+  audit(req, 'employee_lead_update_leader_remarks', String(update._id), { leadIndex: input.leadIndex });
+  res.json({ ok: true, leaderRemarks: input.leaderRemarks });
 }));
 
 export default r;

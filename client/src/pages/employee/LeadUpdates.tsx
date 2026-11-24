@@ -20,6 +20,7 @@ type LeadUpdate = {
 type LeadDetail = { assignedTo: string; leadStatus: 'Cold' | 'Warm' | 'Hot'; paymentStatus: string; leadCount?: number };
 const emptyLead = (): LeadDetail => ({ assignedTo: '', leadStatus: 'Warm', paymentStatus: '' });
 const LEAD_SUBMISSION_URL = 'https://forms.gle/WUECs4ApDnEbEYEq8';
+const LEAD_ASSIGNEES = ['Fazil', 'Bhargavi', 'Shoail', 'Shabbeer', 'Kousik', 'Jayshree', 'Self', 'Nanda', 'Other'];
 
 function submittedAt(value: string) {
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
@@ -28,6 +29,7 @@ function submittedAt(value: string) {
 function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: string; busy: boolean; onClose: () => void; onSubmit: (data: { leads: LeadDetail[] }) => Promise<void> }) {
   const [leadCount, setLeadCount] = useState('1');
   const [leads, setLeads] = useState<LeadDetail[]>([emptyLead()]);
+  const [otherAssignees, setOtherAssignees] = useState<Record<number, string>>({});
   const resizeLeads = (value: string) => {
     setLeadCount(value);
     const count = Number(value);
@@ -40,7 +42,11 @@ function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: str
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    void onSubmit({ leads: leads.map((lead) => ({ ...lead, assignedTo: lead.assignedTo.trim(), paymentStatus: lead.paymentStatus.trim() })) });
+    if (leads.some((lead, index) => lead.assignedTo === 'Other' && !otherAssignees[index]?.trim())) {
+      toast('Enter the assignee name for each lead marked Other.', 'err');
+      return;
+    }
+    void onSubmit({ leads: leads.map((lead, index) => ({ ...lead, assignedTo: (lead.assignedTo === 'Other' ? otherAssignees[index] : lead.assignedTo).trim(), paymentStatus: lead.paymentStatus.trim() })) });
   };
   return (
     <form className="space-y-3" onSubmit={submit}>
@@ -49,7 +55,14 @@ function LeadForm({ employeeName, busy, onClose, onSubmit }: { employeeName: str
       <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
         {leads.map((lead, index) => <fieldset key={index} className="space-y-3 rounded-xl border border-slate-200 p-3">
           <legend className="px-1 text-sm font-bold text-crimson-700">Lead {index + 1}</legend>
-          <div><label className="label" htmlFor={`lead-assigned-${index}`}>Whom did you assign this to?</label><input id={`lead-assigned-${index}`} className="input" maxLength={100} required value={lead.assignedTo} onChange={(event) => changeLead(index, { assignedTo: event.target.value })} placeholder="Person or team name" /></div>
+          <div>
+            <label className="label" htmlFor={`lead-assigned-${index}`}>Whom did you assign this to?</label>
+            <select id={`lead-assigned-${index}`} className="input" required value={lead.assignedTo} onChange={(event) => changeLead(index, { assignedTo: event.target.value })}>
+              <option value="">Select an assignee</option>
+              {LEAD_ASSIGNEES.map((assignee) => <option key={assignee} value={assignee}>{assignee}</option>)}
+            </select>
+            {lead.assignedTo === 'Other' && <input aria-label="Enter assignee name" className="input mt-2" maxLength={100} required value={otherAssignees[index] || ''} onChange={(event) => setOtherAssignees((current) => ({ ...current, [index]: event.target.value }))} placeholder="Enter name" />}
+          </div>
           <div><label className="label" htmlFor={`lead-status-${index}`}>Lead status</label><select id={`lead-status-${index}`} className="input" value={lead.leadStatus} onChange={(event) => changeLead(index, { leadStatus: event.target.value as LeadDetail['leadStatus'] })}><option>Cold</option><option>Warm</option><option>Hot</option></select></div>
           <div><label className="label" htmlFor={`lead-payment-${index}`}>Payment status / next step</label><textarea id={`lead-payment-${index}`} className="input resize-y" rows={2} maxLength={500} required value={lead.paymentStatus} onChange={(event) => changeLead(index, { paymentStatus: event.target.value })} placeholder="e.g. Will pay tomorrow, quote sent" /></div>
         </fieldset>)}
