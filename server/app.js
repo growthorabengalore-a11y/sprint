@@ -15,6 +15,7 @@ import teams from './routes/teams.js';
 import teamPerformance from './routes/teamPerformance.js';
 import leads from './routes/leads.js';
 import employeeLeadUpdates from './routes/employeeLeadUpdates.js';
+import greaterRewards from './routes/greaterRewards.js';
 import roles from './routes/roles.js';
 
 export function createApp() {
@@ -45,6 +46,7 @@ export function createApp() {
   app.use('/api/team-performance', teamPerformance);
   app.use('/api/leads', leads);
   app.use('/api/lead-updates', employeeLeadUpdates);
+  app.use('/api/greater-rewards', greaterRewards);
   app.use((_q, _r, next) => next(Object.assign(new Error('Not found'), { status: 404 })));
   app.use(errorHandler);
   return app;

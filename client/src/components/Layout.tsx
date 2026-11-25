@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { FiGrid, FiUsers, FiFileText, FiTrendingUp, FiClock, FiCalendar, FiSettings, FiLogOut, FiMenu, FiX, FiHome, FiEdit3, FiCamera, FiBriefcase, FiSearch, FiTarget, FiUserPlus, FiList, FiAward } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiFileText, FiTrendingUp, FiClock, FiCalendar, FiSettings, FiLogOut, FiMenu, FiX, FiHome, FiEdit3, FiCamera, FiBriefcase, FiSearch, FiTarget, FiUserPlus, FiList, FiAward, FiGift } from 'react-icons/fi';
 import { useAuth } from '../auth';
 
 const adminNav = [
@@ -9,6 +9,7 @@ const adminNav = [
   { to: '/admin/clients', key: 'clients', label: 'Clients', icon: FiBriefcase }, { to: '/admin/client-data', key: 'client-data', label: 'Client Data', icon: FiSearch },
   { to: '/admin/team-target', key: 'team-target', label: 'Team Leader Target', icon: FiTarget },
   { to: '/admin/team-performance', key: 'team-performance', label: 'Team Performance', icon: FiAward },
+  { to: '/admin/greater-rewards', key: 'greater-rewards', label: 'Greater Rewards Plan', icon: FiGift },
   { to: '/admin/leads', key: 'leads', label: 'Leads Management', icon: FiUserPlus },
   { to: '/admin/attendance', key: 'attendance', label: 'Attendance Dashboard', icon: FiClock }, { to: '/admin/attendance-reports', key: 'attendance-reports', label: 'Attendance Reports', icon: FiCalendar },
   { to: '/admin/settings', key: 'settings', label: 'Settings', icon: FiSettings },

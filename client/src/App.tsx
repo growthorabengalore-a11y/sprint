@@ -15,6 +15,7 @@ import ClientsForm from './pages/admin/Clientsform';
 import Clientdata from './pages/admin/Clientdata';
 import Teamtarget from './pages/admin/Teamtarget';
 import TeamPerformance from './pages/admin/TeamPerformance';
+import GreaterRewards from './pages/admin/GreaterRewards';
 import LeadsCRM from './pages/admin/LeadsCRM';
 import LeadUpdates from './pages/employee/LeadUpdates';
 import Home from './pages/employee/Home';
@@ -38,6 +39,7 @@ const pagePaths: Record<string, string> = {
   attendance: '/admin/attendance', 'attendance-reports': '/admin/attendance-reports', clients: '/admin/clients',
   'client-data': '/admin/client-data', 'team-target': '/admin/team-target', leads: '/admin/leads', settings: '/admin/settings',
   'team-performance': '/admin/team-performance',
+  'greater-rewards': '/admin/greater-rewards',
 };
 function AdminPageAccess({ page, children }: { page: string; children: JSX.Element }) {
   const { user } = useAuth();
@@ -78,6 +80,7 @@ export default function App() {
           <Route path="client-data" element={<AdminPageAccess page="client-data"><Clientdata /></AdminPageAccess>} />
           <Route path="team-target" element={<AdminPageAccess page="team-target"><Teamtarget /></AdminPageAccess>} />
           <Route path="team-performance" element={<AdminPageAccess page="team-performance"><TeamPerformance /></AdminPageAccess>} />
+          <Route path="greater-rewards" element={<AdminPageAccess page="greater-rewards"><GreaterRewards /></AdminPageAccess>} />
           <Route path="leads" element={<AdminPageAccess page="leads"><LeadsCRM /></AdminPageAccess>} />
           <Route path="roles" element={<AdminPageAccess page="roles"><RolesCreation /></AdminPageAccess>} />
         </Route>
