@@ -1,13 +1,14 @@
 import { FormEvent, useMemo, useRef, useState } from 'react';
-import { FiAward, FiDollarSign, FiDownload, FiPlus } from 'react-icons/fi';
+import { FiAward, FiDollarSign, FiDownload, FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi';
 import { api, errMsg } from '../../api';
-import { Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
+import { Confirm, Empty, ErrorBox, Modal, Skeleton, toast } from '../../components/ui';
 import { useFetch } from '../../components/useFetch';
 import { downloadPng } from '../../utils/exportPng';
 import { fmtDate, inr } from '../../utils/format';
 import GreaterRewardsPng from '../../reports/GreaterRewardsPng';
 
 type Member = { id: string; name: string; designation: string; archived: number };
+type EditableMember = Pick<Member, 'id' | 'name' | 'designation'>;
 type Team = {
   id: string;
   teamName: string;
@@ -27,43 +28,45 @@ const initialRange = (): DateRange => {
   return { from: date.toISOString().slice(0, 10), to: today };
 };
 
-function TeamForm({ busy, onClose, onSave }: {
+function TeamForm({ initial, busy, onClose, onSave }: {
+  initial?: Pick<Team, 'id' | 'teamName' | 'weeklyTarget'>;
   busy: boolean;
   onClose: () => void;
   onSave: (teamName: string, weeklyTarget: number) => Promise<void>;
 }) {
-  const [teamName, setTeamName] = useState('');
-  const [weeklyTarget, setWeeklyTarget] = useState('');
+  const [teamName, setTeamName] = useState(initial?.teamName || '');
+  const [weeklyTarget, setWeeklyTarget] = useState(initial ? String(initial.weeklyTarget) : '');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void onSave(teamName.trim(), Number(weeklyTarget));
   };
-  return <Modal title="Create a Team" onClose={onClose}>
+  return <Modal title={initial ? 'Edit Team' : 'Create a Team'} onClose={onClose}>
     <form className="space-y-4" onSubmit={submit}>
       <div><label className="label" htmlFor="rewards-team-name">Team name</label><input id="rewards-team-name" autoFocus required maxLength={100} className="input" value={teamName} onChange={(event) => setTeamName(event.target.value)} /></div>
       <div><label className="label" htmlFor="rewards-weekly-target">Per-week closure requirement (₹)</label><input id="rewards-weekly-target" type="number" min={1} max={1000000000} step={1} required className="input" value={weeklyTarget} onChange={(event) => setWeeklyTarget(event.target.value)} /></div>
-      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Create team'}</button></div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Create team'}</button></div>
     </form>
   </Modal>;
 }
 
-function MemberForm({ teamName, busy, onClose, onSave }: {
+function MemberForm({ initial, teamName, busy, onClose, onSave }: {
+  initial?: EditableMember;
   teamName: string;
   busy: boolean;
   onClose: () => void;
   onSave: (name: string, designation: string) => Promise<void>;
 }) {
-  const [name, setName] = useState('');
-  const [designation, setDesignation] = useState('');
+  const [name, setName] = useState(initial?.name || '');
+  const [designation, setDesignation] = useState(initial?.designation || '');
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void onSave(name.trim(), designation.trim());
   };
-  return <Modal title={`Add Team Member · ${teamName}`} onClose={onClose}>
+  return <Modal title={`${initial ? 'Edit Team Member' : 'Add Team Member'} · ${teamName}`} onClose={onClose}>
     <form className="space-y-4" onSubmit={submit}>
       <div><label className="label" htmlFor="rewards-member-name">Name</label><input id="rewards-member-name" autoFocus required maxLength={100} className="input" value={name} onChange={(event) => setName(event.target.value)} /></div>
       <div><label className="label" htmlFor="rewards-member-designation">Designation</label><input id="rewards-member-designation" required maxLength={100} className="input" value={designation} onChange={(event) => setDesignation(event.target.value)} /></div>
-      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Add member'}</button></div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : initial ? 'Save changes' : 'Add member'}</button></div>
     </form>
   </Modal>;
 }
@@ -90,8 +93,10 @@ function PaymentForm({ memberName, busy, onClose, onSave }: {
 
 export default function GreaterRewards() {
   const [range, setRange] = useState<DateRange>(initialRange);
-  const [creatingTeam, setCreatingTeam] = useState(false);
-  const [addingMember, setAddingMember] = useState<Team | null>(null);
+  const [teamEditor, setTeamEditor] = useState<Team | null | false>(false);
+  const [memberEditor, setMemberEditor] = useState<{ team: Team; member?: EditableMember } | null>(null);
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+  const [memberToDelete, setMemberToDelete] = useState<{ team: Team; member: Member } | null>(null);
   const [addingPayment, setAddingPayment] = useState<{ team: Team; member: Member } | null>(null);
   const [busy, setBusy] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
@@ -103,9 +108,10 @@ export default function GreaterRewards() {
   const saveTeam = async (teamName: string, weeklyTarget: number) => {
     setBusy(true);
     try {
-      await api.post('/greater-rewards', { teamName, weeklyTarget });
-      setCreatingTeam(false);
-      toast('Team created.');
+      if (teamEditor) await api.put(`/greater-rewards/${teamEditor.id}`, { teamName, weeklyTarget });
+      else await api.post('/greater-rewards', { teamName, weeklyTarget });
+      setTeamEditor(false);
+      toast(teamEditor ? 'Team updated.' : 'Team created.');
       await reload();
     } catch (requestError) {
       toast(errMsg(requestError), 'err');
@@ -114,12 +120,44 @@ export default function GreaterRewards() {
     }
   };
   const saveMember = async (name: string, designation: string) => {
-    if (!addingMember) return;
+    if (!memberEditor) return;
     setBusy(true);
     try {
-      await api.post(`/greater-rewards/${addingMember.id}/members`, { name, designation });
-      setAddingMember(null);
-      toast('Team member added.');
+      if (memberEditor.member) {
+        await api.put(`/greater-rewards/${memberEditor.team.id}/members/${memberEditor.member.id}`, { name, designation });
+      } else {
+        await api.post(`/greater-rewards/${memberEditor.team.id}/members`, { name, designation });
+      }
+      setMemberEditor(null);
+      toast(memberEditor.member ? 'Team member updated.' : 'Team member added.');
+      await reload();
+    } catch (requestError) {
+      toast(errMsg(requestError), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const removeTeam = async () => {
+    if (!teamToDelete) return;
+    setBusy(true);
+    try {
+      await api.delete(`/greater-rewards/${teamToDelete.id}`);
+      setTeamToDelete(null);
+      toast('Team, members, and their payment history deleted.');
+      await reload();
+    } catch (requestError) {
+      toast(errMsg(requestError), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const removeMember = async () => {
+    if (!memberToDelete) return;
+    setBusy(true);
+    try {
+      await api.delete(`/greater-rewards/${memberToDelete.team.id}/members/${memberToDelete.member.id}`);
+      setMemberToDelete(null);
+      toast('Team member and their payment history deleted.');
       await reload();
     } catch (requestError) {
       toast(errMsg(requestError), 'err');
@@ -160,7 +198,7 @@ export default function GreaterRewards() {
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><div className="flex items-center gap-2"><FiAward className="text-crimson-600" size={22} /><h1 className="text-2xl font-extrabold">Greater Rewards Plan</h1></div><p className="mt-1 text-sm text-slate-500">Track team weekly closure targets and each member’s accumulated closures.</p></div>
-      <button type="button" className="btn btn-primary" onClick={() => setCreatingTeam(true)}><FiPlus />Create a Team</button>
+      <button type="button" className="btn btn-primary" onClick={() => setTeamEditor(null)}><FiPlus />Create a Team</button>
     </div>
     <section className="card grid gap-3 p-4 sm:grid-cols-2">
       <div><label className="label" htmlFor="rewards-from">From date</label><input id="rewards-from" type="date" max={todayKey()} className="input" value={range.from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} /></div>
@@ -175,14 +213,20 @@ export default function GreaterRewards() {
           <div><h2 className="font-bold">{team.teamName}</h2><p className="text-xs text-slate-500">{team.members.length} members · weekly target {inr(team.weeklyTarget)} · archived {inr(team.archived)}{team.performance != null ? ` · ${team.performance.toFixed(2)}% performance` : ''}</p></div>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn btn-ghost !min-h-[36px] !px-3 text-xs" disabled={!validRange || exportingId === team.id} onClick={() => void exportReport(team)}><FiDownload />{exportingId === team.id ? 'Preparing…' : 'Download PNG report'}</button>
-            <button type="button" className="btn btn-primary !min-h-[36px] !px-3 text-xs" onClick={() => setAddingMember(team)}><FiPlus />Add Team Member</button>
+            <button type="button" className="btn btn-primary !min-h-[36px] !px-3 text-xs" onClick={() => setMemberEditor({ team })}><FiPlus />Add Team Member</button>
+            <button type="button" aria-label={`Edit ${team.teamName}`} className="btn btn-ghost !min-h-[36px] !px-3 text-xs" onClick={() => setTeamEditor(team)}><FiEdit2 />Edit team</button>
+            <button type="button" aria-label={`Delete ${team.teamName}`} className="btn btn-ghost !min-h-[36px] !px-3 text-xs text-red-600" onClick={() => setTeamToDelete(team)}><FiTrash2 />Delete team</button>
           </div>
         </div>
         {!team.members.length ? <Empty text="No members yet. Add a team member to start recording closures." /> : <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px]"><thead><tr>{['Name', 'Designation', 'Archived in selected dates', ''].map((heading, index) => <th key={`${heading}-${index}`} className="th">{heading}</th>)}</tr></thead>
+          <table className="w-full min-w-[760px]"><thead><tr>{['Name', 'Designation', 'Archived in selected dates', 'Actions'].map((heading, index) => <th key={`${heading}-${index}`} className="th">{heading}</th>)}</tr></thead>
             <tbody>{team.members.map((member) => <tr key={member.id}>
               <td className="td font-semibold">{member.name}</td><td className="td">{member.designation}</td><td className="td font-semibold">{inr(member.archived)}</td>
-              <td className="td"><button type="button" className="btn btn-ghost !min-h-[36px] !px-3 text-xs" onClick={() => setAddingPayment({ team, member })}><FiDollarSign />Add payment</button></td>
+              <td className="td"><div className="flex flex-wrap gap-2">
+                <button type="button" className="btn btn-ghost !min-h-[36px] !px-3 text-xs" onClick={() => setAddingPayment({ team, member })}><FiDollarSign />Add payment</button>
+                <button type="button" aria-label={`Edit ${member.name}`} className="btn btn-ghost !min-h-[36px] !px-3 text-xs" onClick={() => setMemberEditor({ team, member })}><FiEdit2 />Edit</button>
+                <button type="button" aria-label={`Delete ${member.name}`} className="btn btn-ghost !min-h-[36px] !px-3 text-xs text-red-600" onClick={() => setMemberToDelete({ team, member })}><FiTrash2 />Delete</button>
+              </div></td>
             </tr>)}</tbody>
           </table>
         </div>}
@@ -191,8 +235,10 @@ export default function GreaterRewards() {
     <div className="pointer-events-none fixed -left-[12000px] top-0" aria-hidden="true">
       {teams.map((team) => <GreaterRewardsPng key={team.id} ref={(node) => { reportRefs.current[team.id] = node; }} team={team} from={range.from} to={range.to} />)}
     </div>
-    {creatingTeam && <TeamForm busy={busy} onClose={() => setCreatingTeam(false)} onSave={saveTeam} />}
-    {addingMember && <MemberForm teamName={addingMember.teamName} busy={busy} onClose={() => setAddingMember(null)} onSave={saveMember} />}
+    {teamEditor !== false && <TeamForm key={teamEditor?.id || 'new'} initial={teamEditor || undefined} busy={busy} onClose={() => setTeamEditor(false)} onSave={saveTeam} />}
+    {memberEditor && <MemberForm key={memberEditor.member?.id || `new-${memberEditor.team.id}`} initial={memberEditor.member} teamName={memberEditor.team.teamName} busy={busy} onClose={() => setMemberEditor(null)} onSave={saveMember} />}
     {addingPayment && <PaymentForm memberName={addingPayment.member.name} busy={busy} onClose={() => setAddingPayment(null)} onSave={savePayment} />}
+    {teamToDelete && <Confirm title="Delete team?" text={`Delete ${teamToDelete.teamName}, all its members, and all their closure payment history? This cannot be undone.`} busy={busy} onNo={() => setTeamToDelete(null)} onYes={() => void removeTeam()} />}
+    {memberToDelete && <Confirm title="Delete team member?" text={`Delete ${memberToDelete.member.name} from ${memberToDelete.team.teamName}, including their closure payment history? This cannot be undone.`} busy={busy} onNo={() => setMemberToDelete(null)} onYes={() => void removeMember()} />}
   </div>;
 }

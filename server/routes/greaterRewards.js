@@ -88,6 +88,23 @@ r.post('/', wrap(async (req, res) => {
   res.status(201).json({ ok: true, team: safeTeam(team, null, null) });
 }));
 
+r.put('/:id', wrap(async (req, res) => {
+  const input = teamInput.parse(req.body);
+  const team = await findTeam(req, req.params.id);
+  team.teamName = input.teamName;
+  team.weeklyTarget = input.weeklyTarget;
+  await team.save();
+  audit(req, 'greater_rewards_team_update', String(team._id), { teamName: team.teamName, weeklyTarget: team.weeklyTarget });
+  res.json({ ok: true, team: safeTeam(team, null, null) });
+}));
+
+r.delete('/:id', wrap(async (req, res) => {
+  const team = await GreaterRewardsTeam.findOneAndDelete({ _id: idParam(req.params.id), ...teamScope(req) });
+  if (!team) throw new HttpError(404, 'Team not found');
+  audit(req, 'greater_rewards_team_delete', String(team._id), { teamName: team.teamName, memberCount: team.members.length });
+  res.json({ ok: true });
+}));
+
 r.post('/:id/members', wrap(async (req, res) => {
   const input = memberInput.parse(req.body);
   const team = await findTeam(req, req.params.id);
@@ -96,6 +113,30 @@ r.post('/:id/members', wrap(async (req, res) => {
   const member = team.members[team.members.length - 1];
   audit(req, 'greater_rewards_member_create', String(team._id), { memberId: String(member._id), name: member.name });
   res.status(201).json({ ok: true, team: safeTeam(team, null, null) });
+}));
+
+r.put('/:id/members/:memberId', wrap(async (req, res) => {
+  const input = memberInput.parse(req.body);
+  const team = await findTeam(req, req.params.id);
+  const member = team.members.id(idParam(req.params.memberId));
+  if (!member) throw new HttpError(404, 'Member not found');
+  member.name = input.name;
+  member.designation = input.designation;
+  await team.save();
+  audit(req, 'greater_rewards_member_update', String(team._id), { memberId: String(member._id), name: member.name });
+  res.json({ ok: true, team: safeTeam(team, null, null) });
+}));
+
+r.delete('/:id/members/:memberId', wrap(async (req, res) => {
+  const team = await findTeam(req, req.params.id);
+  const member = team.members.id(idParam(req.params.memberId));
+  if (!member) throw new HttpError(404, 'Member not found');
+  const memberId = String(member._id);
+  const name = member.name;
+  member.deleteOne();
+  await team.save();
+  audit(req, 'greater_rewards_member_delete', String(team._id), { memberId, name });
+  res.json({ ok: true });
 }));
 
 r.post('/:id/members/:memberId/payments', wrap(async (req, res) => {
